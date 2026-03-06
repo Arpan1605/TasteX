@@ -1,0 +1,106 @@
+openapi: 3.0.3
+info:
+  title: Hotel Room Ordering API
+  version: 1.1.0
+  description: COD-only phase. Payment gateway APIs are disabled for now.
+servers:
+  - url: https://api.tastex.example.com
+paths:
+  /api/v1/guest/hotels/{hotelCode}/menu:
+    get:
+      summary: Get menu by hotel QR code route
+      parameters:
+        - in: path
+          name: hotelCode
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Menu fetched
+
+  /api/v1/guest/otp/send:
+    post:
+      summary: Send OTP to guest mobile
+      responses:
+        '200':
+          description: OTP sent
+
+  /api/v1/guest/otp/verify:
+    post:
+      summary: Verify OTP and issue guest session token
+      responses:
+        '200':
+          description: OTP verified
+
+  /api/v1/guest/checkout:
+    post:
+      summary: Place COD order
+      responses:
+        '200':
+          description: COD order placed
+
+  /api/v1/guest/orders/{orderNumber}/status:
+    get:
+      summary: Get guest order status
+      parameters:
+        - in: path
+          name: orderNumber
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order status
+
+  /api/v1/kitchen/orders:
+    get:
+      summary: Get kitchen orders (COD + paid online)
+      responses:
+        '200':
+          description: Kitchen order list
+
+  /api/v1/kitchen/orders/{orderId}/status:
+    patch:
+      summary: Update kitchen order status
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Status updated
+
+  /api/v1/payments/orders:
+    post:
+      deprecated: true
+      summary: Disabled in COD-only phase
+      responses:
+        '422':
+          description: PAYMENT_GATEWAY_DISABLED
+
+  /api/v1/payments/verify:
+    post:
+      deprecated: true
+      summary: Disabled in COD-only phase
+      responses:
+        '422':
+          description: PAYMENT_GATEWAY_DISABLED
+
+  /api/v1/webhooks/payments:
+    post:
+      deprecated: true
+      summary: Disabled in COD-only phase
+      responses:
+        '422':
+          description: WEBHOOK_DISABLED
+components:
+  schemas:
+    PaymentMethod:
+      type: string
+      enum: [Cod]
+    PaymentStatus:
+      type: string
+      enum: [Pending, Paid, Failed, Refunded]
+    OrderStatus:
+      type: string
+      enum: [Accepted, Preparing, Ready, Delivered, Cancelled]

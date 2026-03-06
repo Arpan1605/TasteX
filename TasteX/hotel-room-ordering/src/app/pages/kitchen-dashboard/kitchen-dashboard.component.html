@@ -1,0 +1,61 @@
+<div class="dashboard-page">
+  <div class="topbar">
+    <h2>Kitchen Dashboard</h2>
+    <a pButton [routerLink]="'/guest/blr-gp-01'" label="Back to Guest Flow" severity="contrast" size="small"></a>
+  </div>
+
+  <p-card>
+    <ng-template pTemplate="title">Kitchen Orders</ng-template>
+    <ng-template pTemplate="subtitle">COD and successfully confirmed online orders are visible</ng-template>
+
+    <div class="filter-wrap">
+      <label for="hotelFilter">Filter by Hotel</label>
+      <p-select
+        inputId="hotelFilter"
+        [options]="hotels"
+        [showClear]="true"
+        [ngModel]="selectedHotelId()"
+        (ngModelChange)="setHotelFilter($event)"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="All hotels"
+      ></p-select>
+    </div>
+
+    <p-table [value]="rows()" [tableStyle]="{ 'min-width': '64rem' }" [stripedRows]="true" [paginator]="true" [rows]="8">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Order No</th>
+          <th>Hotel</th>
+          <th>Mobile</th>
+          <th>Total</th>
+          <th>Status</th>
+          <th>Service Time</th>
+          <th>Update Status</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-row>
+        <tr>
+          <td>{{ row.orderNo }}</td>
+          <td>{{ row.hotelName }}</td>
+          <td>{{ row.mobile }}</td>
+          <td>{{ row.totalAmount | currency:'INR':'symbol':'1.0-0' }}</td>
+          <td><p-tag [value]="row.status" [severity]="statusSeverity(row.status)"></p-tag></td>
+          <td>{{ row.serviceTimeMins }} mins</td>
+          <td>
+            <p-selectbutton
+              [options]="statusOptions"
+              optionLabel="label"
+              optionValue="value"
+              [ngModel]="row.status"
+              (ngModelChange)="updateStatus(row.id, $event)"
+              size="small"
+            ></p-selectbutton>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+</div>
+
+
