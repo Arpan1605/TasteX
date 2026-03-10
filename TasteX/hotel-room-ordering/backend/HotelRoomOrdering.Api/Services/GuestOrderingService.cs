@@ -6,17 +6,20 @@ using HotelRoomOrdering.Api.Contracts.Guest;
 using HotelRoomOrdering.Api.Data;
 using HotelRoomOrdering.Api.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 
 namespace HotelRoomOrdering.Api.Services;
 
 public sealed class GuestOrderingService(
     OrderingDbContext db,
     IClock clock,
-    IHashService hashService) : IGuestOrderingContract
+    IHashService hashService,
+    IHostEnvironment environment) : IGuestOrderingContract
 {
     public async Task<ApiResponse<HotelMenuResponse>> GetHotelMenuAsync(string hotelCode, CancellationToken cancellationToken = default)
     {
         var hotel = await db.Hotels
+            .AsNoTracking()
             .Include(h => h.City)
             .Include(h => h.Kitchen)
             .FirstOrDefaultAsync(h => h.HotelCode == hotelCode && h.IsActive, cancellationToken);
@@ -26,19 +29,31 @@ public sealed class GuestOrderingService(
             return new ApiResponse<HotelMenuResponse>(false, null, new ApiError("HOTEL_NOT_FOUND", "Invalid or inactive hotel code."));
         }
 
+        var hotelMenuItems = await db.HotelMenuItems
+            .AsNoTracking()
+            .Include(hmi => hmi.Item)
+            .ThenInclude(i => i.Category)
+            .Where(hmi => hmi.HotelId == hotel.HotelId)
+            .ToListAsync(cancellationToken);
+
+        var menuItemIds = hotelMenuItems.Select(x => x.ItemId).Distinct().ToList();
         var availability = await db.KitchenItemAvailability
-            .Where(a => a.KitchenId == hotel.KitchenId && a.IsAvailable)
+            .AsNoTracking()
+            .Where(a => a.KitchenId == hotel.KitchenId
+                && a.IsAvailable
+                && (a.EffectiveToUtc == null || a.EffectiveToUtc >= clock.UtcNow)
+                && menuItemIds.Contains(a.ItemId))
             .ToListAsync(cancellationToken);
 
-        var availableItemIds = availability.Select(a => a.ItemId).ToHashSet();
-
-        var items = await db.Items
-            .Where(i => i.IsActive && availableItemIds.Contains(i.ItemId))
-            .ToListAsync(cancellationToken);
+        var availabilityByItemId = availability
+            .GroupBy(a => a.ItemId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.EffectiveFromUtc).First());
 
         var categories = await db.Categories
+            .AsNoTracking()
             .Where(c => c.IsActive)
             .OrderBy(c => c.SortOrder)
+            .ThenBy(c => c.Name)
             .ToListAsync(cancellationToken);
 
         var categoryDtos = categories
@@ -46,21 +61,27 @@ public sealed class GuestOrderingService(
                 c.CategoryId,
                 c.Name,
                 c.SortOrder,
-                items.Where(i => i.CategoryId == c.CategoryId)
-                    .Select(i =>
+                hotelMenuItems
+                    .Where(hmi => hmi.Item.CategoryId == c.CategoryId
+                        && hmi.IsActive
+                        && hmi.Item.IsActive
+                        && hmi.Item.Category.IsActive)
+                    .OrderBy(hmi => hmi.Item.Name)
+                    .Select(hmi =>
                     {
-                        var effective = availability.First(a => a.ItemId == i.ItemId);
+                        availabilityByItemId.TryGetValue(hmi.ItemId, out var effective);
+                        var hasInventory = hmi.InventoryQuantity > 0;
+                        var isAvailable = hasInventory && effective is not null && effective.IsAvailable;
                         return new MenuItemDto(
-                            i.ItemId,
-                            i.ItemCode,
-                            i.Name,
-                            i.Description,
-                            effective.EffectivePrice ?? i.BasePrice,
-                            i.IsVeg,
-                            effective.IsAvailable);
+                            hmi.ItemId,
+                            hmi.Item.ItemCode,
+                            hmi.Item.Name,
+                            hmi.Item.Description,
+                            effective?.EffectivePrice ?? hmi.Item.BasePrice,
+                            hmi.Item.IsVeg,
+                            isAvailable);
                     })
                     .ToList()))
-            .Where(c => c.Items.Count > 0)
             .ToList();
 
         var response = new HotelMenuResponse(
@@ -84,7 +105,7 @@ public sealed class GuestOrderingService(
             return new ApiResponse<SendOtpResponse>(false, null, new ApiError("HOTEL_NOT_FOUND", "Invalid hotel code."));
         }
 
-        var otpCode = Random.Shared.Next(100000, 999999).ToString();
+        var otpCode = environment.IsDevelopment() ? "123456" : Random.Shared.Next(100000, 999999).ToString();
         var expiresAt = clock.UtcNow.AddMinutes(5);
 
         var session = new OtpSession
@@ -207,21 +228,50 @@ public sealed class GuestOrderingService(
 
         var itemIds = lineRequests.Select(x => x.ItemId).ToHashSet();
 
-        var availablePrices = await db.KitchenItemAvailability
-            .Where(x => x.KitchenId == hotel.KitchenId && x.IsAvailable && itemIds.Contains(x.ItemId))
-            .ToDictionaryAsync(x => x.ItemId, cancellationToken);
+        var hotelMenuItems = await db.HotelMenuItems
+            .Include(hmi => hmi.Item)
+            .ThenInclude(i => i.Category)
+            .Where(hmi => hmi.HotelId == hotel.HotelId && itemIds.Contains(hmi.ItemId))
+            .ToDictionaryAsync(hmi => hmi.ItemId, cancellationToken);
 
-        var items = await db.Items.Where(i => itemIds.Contains(i.ItemId) && i.IsActive).ToDictionaryAsync(i => i.ItemId, cancellationToken);
+        var availability = await db.KitchenItemAvailability
+            .AsNoTracking()
+            .Where(x => x.KitchenId == hotel.KitchenId
+                && x.IsAvailable
+                && (x.EffectiveToUtc == null || x.EffectiveToUtc >= clock.UtcNow)
+                && itemIds.Contains(x.ItemId))
+            .ToListAsync(cancellationToken);
 
+        var availabilityByItemId = availability
+            .GroupBy(x => x.ItemId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.EffectiveFromUtc).First());
+
+        var now = clock.UtcNow;
         var lines = new List<OrderLine>();
         foreach (var lineRequest in lineRequests)
         {
-            if (!items.TryGetValue(lineRequest.ItemId, out var item) || !availablePrices.TryGetValue(lineRequest.ItemId, out var availability))
+            if (!hotelMenuItems.TryGetValue(lineRequest.ItemId, out var hotelMenuItem))
             {
                 return new ApiResponse<CheckoutResponse>(false, null, new ApiError("ITEM_UNAVAILABLE", $"Item {lineRequest.ItemId} is unavailable."));
             }
 
-            var price = availability.EffectivePrice ?? item.BasePrice;
+            var item = hotelMenuItem.Item;
+            if (!hotelMenuItem.IsActive || !item.IsActive || !item.Category.IsActive)
+            {
+                return new ApiResponse<CheckoutResponse>(false, null, new ApiError("ITEM_UNAVAILABLE", $"Item {lineRequest.ItemId} is unavailable."));
+            }
+
+            if (!availabilityByItemId.TryGetValue(lineRequest.ItemId, out var itemAvailability))
+            {
+                return new ApiResponse<CheckoutResponse>(false, null, new ApiError("ITEM_UNAVAILABLE", $"Item {lineRequest.ItemId} is unavailable."));
+            }
+
+            if (hotelMenuItem.InventoryQuantity < lineRequest.Quantity)
+            {
+                return new ApiResponse<CheckoutResponse>(false, null, new ApiError("ITEM_UNAVAILABLE", $"Item {lineRequest.ItemId} is out of stock."));
+            }
+
+            var price = itemAvailability.EffectivePrice ?? item.BasePrice;
             lines.Add(new OrderLine
             {
                 ItemId = item.ItemId,
@@ -230,8 +280,11 @@ public sealed class GuestOrderingService(
                 Quantity = lineRequest.Quantity,
                 UnitPrice = price,
                 LineTotal = price * lineRequest.Quantity,
-                CreatedAtUtc = clock.UtcNow
+                CreatedAtUtc = now
             });
+
+            hotelMenuItem.InventoryQuantity -= lineRequest.Quantity;
+            hotelMenuItem.UpdatedAtUtc = now;
         }
 
         var subtotal = lines.Sum(l => l.LineTotal);
@@ -251,10 +304,10 @@ public sealed class GuestOrderingService(
             PaymentStatus = PaymentStatus.Pending,
             WebhookVerified = false,
             OrderStatus = OrderStatus.Accepted,
-            AcceptedAtUtc = clock.UtcNow,
+            AcceptedAtUtc = now,
             GuestNotes = request.GuestNotes,
-            CreatedAtUtc = clock.UtcNow,
-            UpdatedAtUtc = clock.UtcNow,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
             Lines = lines
         };
 
@@ -302,3 +355,6 @@ public sealed class GuestOrderingService(
         return new ApiResponse<OrderStatusResponse>(true, response, null);
     }
 }
+
+
+

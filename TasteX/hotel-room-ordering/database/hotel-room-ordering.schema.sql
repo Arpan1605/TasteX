@@ -21,8 +21,9 @@ GO
 
 CREATE TABLE dbo.Cities (
     CityId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    CityCode NVARCHAR(16) NOT NULL,
+    CityCode NVARCHAR(32) NOT NULL,
     Name NVARCHAR(120) NOT NULL,
+    StateName NVARCHAR(120) NULL,
     IsActive BIT NOT NULL CONSTRAINT DF_Cities_IsActive DEFAULT (1),
     CreatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_Cities_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
     UpdatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_Cities_UpdatedAtUtc DEFAULT (SYSUTCDATETIME()),
@@ -35,12 +36,17 @@ CREATE TABLE dbo.Kitchens (
     CityId BIGINT NOT NULL,
     KitchenCode NVARCHAR(32) NOT NULL,
     Name NVARCHAR(160) NOT NULL,
+    AddressLine NVARCHAR(300) NULL,
     ContactPhone NVARCHAR(20) NULL,
+    ManagerName NVARCHAR(120) NULL,
+    LoginUsername NVARCHAR(80) NOT NULL,
+    PasswordHash NVARCHAR(512) NOT NULL,
     IsActive BIT NOT NULL CONSTRAINT DF_Kitchens_IsActive DEFAULT (1),
     CreatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_Kitchens_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
     UpdatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_Kitchens_UpdatedAtUtc DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT FK_Kitchens_Cities_CityId FOREIGN KEY (CityId) REFERENCES dbo.Cities(CityId),
-    CONSTRAINT UQ_Kitchens_KitchenCode UNIQUE (KitchenCode)
+    CONSTRAINT UQ_Kitchens_KitchenCode UNIQUE (KitchenCode),
+    CONSTRAINT UQ_Kitchens_LoginUsername UNIQUE (LoginUsername)
 );
 GO
 
@@ -51,6 +57,7 @@ CREATE TABLE dbo.Hotels (
     HotelCode NVARCHAR(32) NOT NULL,
     Name NVARCHAR(180) NOT NULL,
     AddressLine NVARCHAR(300) NULL,
+    RoomCount INT NOT NULL CONSTRAINT DF_Hotels_RoomCount DEFAULT (0),
     IsActive BIT NOT NULL CONSTRAINT DF_Hotels_IsActive DEFAULT (1),
     CreatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_Hotels_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
     UpdatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_Hotels_UpdatedAtUtc DEFAULT (SYSUTCDATETIME()),
@@ -89,6 +96,22 @@ CREATE TABLE dbo.Items (
 );
 GO
 
+CREATE TABLE dbo.HotelMenuItems (
+    HotelMenuItemId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    HotelId BIGINT NOT NULL,
+    ItemId BIGINT NOT NULL,
+    IsActive BIT NOT NULL CONSTRAINT DF_HotelMenuItems_IsActive DEFAULT (1),
+    InventoryQuantity INT NOT NULL CONSTRAINT DF_HotelMenuItems_InventoryQuantity DEFAULT (0),
+    PrepTimeMinutes INT NULL,
+    ImageUrl NVARCHAR(600) NULL,
+    CreatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_HotelMenuItems_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
+    UpdatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_HotelMenuItems_UpdatedAtUtc DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT FK_HotelMenuItems_Hotels_HotelId FOREIGN KEY (HotelId) REFERENCES dbo.Hotels(HotelId),
+    CONSTRAINT FK_HotelMenuItems_Items_ItemId FOREIGN KEY (ItemId) REFERENCES dbo.Items(ItemId),
+    CONSTRAINT UQ_HotelMenuItems_HotelId_ItemId UNIQUE (HotelId, ItemId),
+    CONSTRAINT CK_HotelMenuItems_InventoryQuantity_NonNegative CHECK (InventoryQuantity >= 0)
+);
+GO
 CREATE TABLE dbo.KitchenItemAvailability (
     KitchenItemAvailabilityId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
     KitchenId BIGINT NOT NULL,
@@ -348,17 +371,17 @@ GO
    Optional Seed (minimal)
    ========================= */
 
-INSERT INTO dbo.Cities (CityCode, Name) VALUES
-('BLR', 'Bengaluru'),
-('MUM', 'Mumbai'),
-('DEL', 'Delhi');
+INSERT INTO dbo.Cities (CityCode, Name, StateName) VALUES
+('BLR', 'Bengaluru', 'Karnataka'),
+('MUM', 'Mumbai', 'Maharashtra'),
+('DEL', 'Delhi', 'Delhi');
 
-INSERT INTO dbo.Kitchens (CityId, KitchenCode, Name, ContactPhone)
-SELECT c.CityId, 'BLR-CENTRAL', 'Bengaluru Central Kitchen', '+919900000001' FROM dbo.Cities c WHERE c.CityCode = 'BLR'
+INSERT INTO dbo.Kitchens (CityId, KitchenCode, Name, AddressLine, ContactPhone, ManagerName, LoginUsername, PasswordHash)
+SELECT c.CityId, 'BLR-CENTRAL', 'Bengaluru Central Kitchen', 'MG Road, Bengaluru', '+919900000001', 'Ramesh Kumar', 'blrcentral', 'pbkdf2$sha256$100000$AQIDBAUGBwgJCgsMDQ4PEA==$rPQVBteGsvvwWTRt08lr9f1Eu+srr9vJc4EALkRyhQI=' FROM dbo.Cities c WHERE c.CityCode = 'BLR'
 UNION ALL
-SELECT c.CityId, 'BLR-SOUTH', 'Bengaluru South Kitchen', '+919900000002' FROM dbo.Cities c WHERE c.CityCode = 'BLR'
+SELECT c.CityId, 'BLR-SOUTH', 'Bengaluru South Kitchen', 'Koramangala, Bengaluru', '+919900000002', 'Suresh Patel', 'blrsouth', 'pbkdf2$sha256$100000$AQIDBAUGBwgJCgsMDQ4PEA==$DtBGgB8cJf8oHX/PaUSCLcs46FnRoDPccpPZ5SBDZMs=' FROM dbo.Cities c WHERE c.CityCode = 'BLR'
 UNION ALL
-SELECT c.CityId, 'MUM-AIR', 'Mumbai Airport Kitchen', '+919900000003' FROM dbo.Cities c WHERE c.CityCode = 'MUM';
+SELECT c.CityId, 'MUM-AIR', 'Mumbai Airport Kitchen', 'Airport Road, Mumbai', '+919900000003', 'Rajesh Sharma', 'mumair', 'pbkdf2$sha256$100000$AQIDBAUGBwgJCgsMDQ4PEA==$QgAVG0Oz6BUd6dxnvXAnTrrXfiFQjXaizu1LObU/GWU=' FROM dbo.Cities c WHERE c.CityCode = 'MUM';
 
 INSERT INTO dbo.Hotels (CityId, KitchenId, HotelCode, Name, AddressLine)
 SELECT c.CityId, k.KitchenId, 'blr-gp-01', 'Grand Plaza Bengaluru', 'MG Road, Bengaluru'
@@ -377,5 +400,12 @@ INSERT INTO dbo.Categories (CategoryCode, Name, SortOrder) VALUES
 ('SNACKS', 'Snacks', 3),
 ('BEVERAGES', 'Beverages', 4);
 GO
+
+
+
+
+
+
+
 
 

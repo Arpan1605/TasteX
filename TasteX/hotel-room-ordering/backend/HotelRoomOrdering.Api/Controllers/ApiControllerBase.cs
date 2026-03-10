@@ -19,6 +19,11 @@ public abstract class ApiControllerBase : ControllerBase
             return NotFound(response);
         }
 
+        if (code.Contains("LOGIN_", StringComparison.OrdinalIgnoreCase) || code.Contains("AUTH_", StringComparison.OrdinalIgnoreCase))
+        {
+            return Unauthorized(response);
+        }
+
         if (code.Contains("INVALID", StringComparison.OrdinalIgnoreCase) || code.Contains("EXPIRED", StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest(response);

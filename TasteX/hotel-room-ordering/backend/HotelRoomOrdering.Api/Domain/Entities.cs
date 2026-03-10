@@ -7,6 +7,7 @@ public sealed class City
     public long CityId { get; set; }
     public string CityCode { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string? StateName { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
@@ -21,7 +22,11 @@ public sealed class Kitchen
     public long CityId { get; set; }
     public string KitchenCode { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string? AddressLine { get; set; }
     public string? ContactPhone { get; set; }
+    public string? ManagerName { get; set; }
+    public string LoginUsername { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
@@ -38,12 +43,14 @@ public sealed class Hotel
     public string HotelCode { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? AddressLine { get; set; }
+    public int RoomCount { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 
     public City City { get; set; } = null!;
     public Kitchen Kitchen { get; set; } = null!;
+    public ICollection<HotelMenuItem> MenuItems { get; set; } = new List<HotelMenuItem>();
 }
 
 public sealed class Category
@@ -73,6 +80,23 @@ public sealed class Item
     public DateTime UpdatedAtUtc { get; set; }
 
     public Category Category { get; set; } = null!;
+    public ICollection<HotelMenuItem> HotelMenuItems { get; set; } = new List<HotelMenuItem>();
+}
+
+public sealed class HotelMenuItem
+{
+    public long HotelMenuItemId { get; set; }
+    public long HotelId { get; set; }
+    public long ItemId { get; set; }
+    public bool IsActive { get; set; }
+    public int InventoryQuantity { get; set; }
+    public int? PrepTimeMinutes { get; set; }
+    public string? ImageUrl { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+
+    public Hotel Hotel { get; set; } = null!;
+    public Item Item { get; set; } = null!;
 }
 
 public sealed class KitchenItemAvailability
@@ -236,4 +260,8 @@ public sealed class WebhookLog
     public long? RelatedOrderId { get; set; }
     public long? RelatedPaymentOrderId { get; set; }
 }
+
+
+
+
 

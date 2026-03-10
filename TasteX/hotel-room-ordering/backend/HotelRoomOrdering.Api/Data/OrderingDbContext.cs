@@ -11,6 +11,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
     public DbSet<Hotel> Hotels => Set<Hotel>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Item> Items => Set<Item>();
+    public DbSet<HotelMenuItem> HotelMenuItems => Set<HotelMenuItem>();
     public DbSet<KitchenItemAvailability> KitchenItemAvailability => Set<KitchenItemAvailability>();
     public DbSet<OtpSession> OtpSessions => Set<OtpSession>();
     public DbSet<GuestSession> GuestSessions => Set<GuestSession>();
@@ -28,8 +29,9 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
             entity.ToTable("Cities", "dbo");
             entity.HasKey(x => x.CityId);
             entity.HasIndex(x => x.CityCode).IsUnique();
-            entity.Property(x => x.CityCode).HasMaxLength(16);
+            entity.Property(x => x.CityCode).HasMaxLength(32);
             entity.Property(x => x.Name).HasMaxLength(120);
+            entity.Property(x => x.StateName).HasMaxLength(120);
         });
 
         modelBuilder.Entity<Kitchen>(entity =>
@@ -37,9 +39,14 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
             entity.ToTable("Kitchens", "dbo");
             entity.HasKey(x => x.KitchenId);
             entity.HasIndex(x => x.KitchenCode).IsUnique();
+            entity.HasIndex(x => x.LoginUsername).IsUnique();
             entity.Property(x => x.KitchenCode).HasMaxLength(32);
             entity.Property(x => x.Name).HasMaxLength(160);
+            entity.Property(x => x.AddressLine).HasMaxLength(300);
             entity.Property(x => x.ContactPhone).HasMaxLength(20);
+            entity.Property(x => x.ManagerName).HasMaxLength(120);
+            entity.Property(x => x.LoginUsername).HasMaxLength(80);
+            entity.Property(x => x.PasswordHash).HasMaxLength(512);
             entity.HasOne(x => x.City).WithMany(x => x.Kitchens).HasForeignKey(x => x.CityId);
         });
 
@@ -51,6 +58,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
             entity.Property(x => x.HotelCode).HasMaxLength(32);
             entity.Property(x => x.Name).HasMaxLength(180);
             entity.Property(x => x.AddressLine).HasMaxLength(300);
+            entity.Property(x => x.RoomCount).HasDefaultValue(0);
             entity.HasOne(x => x.City).WithMany(x => x.Hotels).HasForeignKey(x => x.CityId);
             entity.HasOne(x => x.Kitchen).WithMany(x => x.Hotels).HasForeignKey(x => x.KitchenId);
         });
@@ -74,6 +82,17 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
             entity.Property(x => x.Description).HasMaxLength(600);
             entity.Property(x => x.BasePrice).HasPrecision(12, 2);
             entity.HasOne(x => x.Category).WithMany(x => x.Items).HasForeignKey(x => x.CategoryId);
+        });
+
+        modelBuilder.Entity<HotelMenuItem>(entity =>
+        {
+            entity.ToTable("HotelMenuItems", "dbo");
+            entity.HasKey(x => x.HotelMenuItemId);
+            entity.HasIndex(x => new { x.HotelId, x.ItemId }).IsUnique();
+            entity.Property(x => x.InventoryQuantity).HasDefaultValue(0);
+            entity.Property(x => x.ImageUrl).HasMaxLength(600);
+            entity.HasOne(x => x.Hotel).WithMany(x => x.MenuItems).HasForeignKey(x => x.HotelId);
+            entity.HasOne(x => x.Item).WithMany(x => x.HotelMenuItems).HasForeignKey(x => x.ItemId);
         });
 
         modelBuilder.Entity<KitchenItemAvailability>(entity =>
@@ -191,4 +210,3 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
         });
     }
 }
-

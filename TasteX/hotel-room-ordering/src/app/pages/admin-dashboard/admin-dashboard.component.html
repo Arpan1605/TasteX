@@ -1,0 +1,1059 @@
+<div class="admin-layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo"><i class="pi pi-shield"></i></div>
+      <div>
+        <strong>Super Admin</strong>
+        <span>RoomServe</span>
+      </div>
+    </div>
+
+    <nav class="menu">
+      @for (item of sidebarItems; track item.label) {
+        <button type="button" class="menu-item" [class.active]="isSection(item.label)" (click)="selectSection(item.label)">
+          <i class="pi" [class]="item.icon"></i>
+          {{ item.label }}
+        </button>
+      }
+    </nav>
+
+    <button type="button" class="sign-out-btn" (click)="signOut()">
+      <i class="pi pi-sign-out"></i>
+      Sign Out
+    </button>
+  </aside>
+
+  <main class="content">
+    <div class="admin-alerts">
+      <button type="button" class="admin-notify-chip" [class.hot]="highlightNew() || unreadNew() > 0" (click)="openAdminNotifications()">
+        <i class="pi pi-bell"></i> {{ chipNewCount() }} new
+      </button>
+    </div>
+
+    @if (adminNotificationsOpen()) {
+      <section class="admin-toast-stack" aria-live="polite">
+        <div class="admin-toast-head">
+          <strong>New Orders</strong>
+          <button type="button" (click)="clearAdminNotifications()">Clear</button>
+        </div>
+        @if (notificationToasts().length === 0) {
+          <article class="admin-toast-item empty">
+            <div>
+              <strong>No new notifications</strong>
+              <p>Incoming orders will appear here.</p>
+            </div>
+          </article>
+        }
+        @for (toast of notificationToasts(); track toast.id) {
+          <article class="admin-toast-item" (click)="viewAdminNotification(toast.orderId)">
+            <i class="pi pi-bell"></i>
+            <div>
+              <strong>New order received</strong>
+              <p>{{ toast.message }}</p>
+            </div>
+            <button type="button" class="toast-close" (click)="$event.stopPropagation(); closeAdminNotification(toast.id)">
+              <i class="pi pi-times"></i>
+            </button>
+          </article>
+        }
+      </section>
+    }
+    @if (isSection('Overview')) {
+      <h1>Dashboard Overview</h1>
+
+      <section class="kpi-grid">
+        <article class="kpi-card">
+          <i class="pi pi-dollar icon green"></i>
+          <strong>{{ totalRevenue() | currency:'INR':'symbol':'1.0-0' }}</strong>
+          <span>Total Revenue</span>
+        </article>
+
+        <article class="kpi-card">
+          <i class="pi pi-shopping-bag icon blue"></i>
+          <strong>{{ totalOrders() }}</strong>
+          <span>Total Orders</span>
+        </article>
+
+        <article class="kpi-card">
+          <i class="pi pi-chart-line icon orange"></i>
+          <strong>{{ deliveredOrders() }}</strong>
+          <span>Delivered</span>
+        </article>
+
+        <article class="kpi-card">
+          <i class="pi pi-clock icon violet"></i>
+          <strong>{{ avgOrderValue() | currency:'INR':'symbol':'1.0-0' }}</strong>
+          <span>Avg Order</span>
+        </article>
+      </section>
+
+      <section class="panel recent-orders-panel">
+        <h2>Recent Orders</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Hotel</th>
+                <th>Room</th>
+                <th>Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of recentOrders(); track row.id) {
+                <tr>
+                  <td>{{ row.orderNo }}</td>
+                  <td>{{ row.hotelName }}</td>
+                  <td>{{ row.roomNumber || '-' }}</td>
+                  <td>{{ row.totalAmount | currency:'INR':'symbol':'1.0-0' }}</td>
+                  <td><span class="status-pill" [class]="'status-pill ' + orderStatusClass(row.status)">{{ row.status }}</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Revenue by City</h2>
+        <div class="city-bars">
+          @for (entry of revenueByCity(); track entry.city) {
+            <div class="bar-col">
+              <div class="bar" [style.height.%]="entry.height"></div>
+              <strong>{{ entry.city }}</strong>
+              <span>{{ entry.revenue | currency:'INR':'symbol':'1.0-0' }}</span>
+            </div>
+          }
+        </div>
+      </section>
+
+      <section class="charts-grid">
+        <section class="panel trend-panel">
+          <h2>7-Day Revenue Trend</h2>
+          <div class="trend-chart">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+              @for (point of sevenDayTrend(); track point.label; let i = $index) {
+                @if (i < sevenDayTrend().length - 1) {
+                  <line
+                    [attr.x1]="sevenDayTrend()[i].x"
+                    [attr.y1]="sevenDayTrend()[i].y"
+                    [attr.x2]="sevenDayTrend()[i + 1].x"
+                    [attr.y2]="sevenDayTrend()[i + 1].y"
+                  ></line>
+                }
+              }
+              @for (point of sevenDayTrend(); track point.label) {
+                <circle [attr.cx]="point.x" [attr.cy]="point.y" r="2.2"></circle>
+              }
+            </svg>
+            <div class="x-labels">
+              @for (point of sevenDayTrend(); track point.label) {
+                <span>{{ point.label }}</span>
+              }
+            </div>
+          </div>
+        </section>
+
+        <section class="panel status-panel">
+          <h2>Order Status Distribution</h2>
+          <div class="donut-wrap">
+            <div class="donut" [style.--delivered]="statusDistribution().deliveredPct + '%'">
+              <div class="inner">{{ statusDistribution().deliveredPct }}%</div>
+            </div>
+            <div class="legend">
+              <p><span class="dot delivered"></span> Delivered: {{ statusDistribution().delivered }}</p>
+              <p><span class="dot active"></span> Active: {{ statusDistribution().active }}</p>
+              <p><span class="dot rejected"></span> Rejected: {{ statusDistribution().rejected }}</p>
+            </div>
+          </div>
+        </section>
+      </section>
+    }
+
+    @if (isSection('Cities')) {
+      <div class="section-head">
+        <h1>Cities</h1>
+        <button type="button" class="add-city-btn" (click)="openAddCityModal()">
+          <i class="pi pi-plus"></i>
+          Add City
+        </button>
+      </div>
+
+      <section class="cities-grid">
+        @for (city of cityCards(); track city.id) {
+          <article class="city-card">
+            <div class="card-head">
+              <div>
+                <h2>{{ city.name }}</h2>
+                <p>{{ city.state }}</p>
+              </div>
+
+              <div class="card-actions">
+                <span class="active-chip" [class.inactive]="!city.isActive">{{ city.isActive ? 'Active' : 'Inactive' }}</span>
+                <button type="button" class="edit-city-btn" (click)="openEditCityModal(city.id)">
+                  <i class="pi pi-pencil"></i>
+                  Edit
+                </button>
+              </div>
+            </div>
+
+            <div class="city-metrics">
+              <div class="metric-box">
+                <strong>{{ city.kitchens }}</strong>
+                <span>Kitchens</span>
+              </div>
+              <div class="metric-box">
+                <strong>{{ city.hotels }}</strong>
+                <span>Hotels</span>
+              </div>
+              <div class="metric-box revenue">
+                <strong>{{ city.revenue | currency:'INR':'symbol':'1.0-0' }}</strong>
+                <span>Revenue</span>
+              </div>
+            </div>
+          </article>
+        }
+      </section>
+    }
+
+    @if (isSection('Kitchens')) {
+      <div class="section-head">
+        <h1>Kitchens</h1>
+        <button type="button" class="add-city-btn" (click)="openAddKitchenModal()">
+          <i class="pi pi-plus"></i>
+          Add Kitchen
+        </button>
+      </div>
+
+      <section class="kitchens-grid">
+        @for (kitchen of kitchenCards(); track kitchen.kitchenId) {
+          <article class="kitchen-card">
+            <div class="kitchen-top">
+              <div class="kitchen-title-wrap">
+                <span class="kitchen-icon"><i class="pi pi-shop"></i></span>
+                <div>
+                  <h2>{{ kitchen.name }}</h2>
+                  <p>{{ kitchen.cityName }} - {{ kitchen.addressLine || '-' }}</p>
+                  <p>Manager: {{ kitchen.managerName || '-' }} - {{ kitchen.contactPhone || '-' }}</p>
+                  <p>Login: <strong>{{ kitchen.loginUsername }}</strong> - Password: <strong>{{ kitchen.hasPasswordConfigured ? 'Configured' : 'Not set' }}</strong></p>
+                  <div class="kitchen-credential-actions">
+                    <button type="button" class="edit-city-btn" (click)="copyKitchenUsername(kitchen.kitchenId)">
+                      <i class="pi pi-copy"></i>
+                      Copy Username
+                    </button>
+                    <button type="button" class="edit-city-btn" (click)="copyKitchenCredentials(kitchen.kitchenId)">
+                      <i class="pi pi-key"></i>
+                      Copy Credentials
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card-actions">
+                <span class="active-chip" [class.inactive]="!kitchen.isActive">{{ kitchen.isActive ? 'Active' : 'Inactive' }}</span>
+                <button type="button" class="edit-city-btn" (click)="openEditKitchenModal(kitchen.kitchenId)">
+                  <i class="pi pi-pencil"></i>
+                  Edit
+                </button>
+              </div>
+            </div>
+
+            <div class="city-metrics kitchen-metrics">
+              <div class="metric-box">
+                <strong>{{ kitchen.hotelsCount }}</strong>
+                <span>Hotels</span>
+              </div>
+              <div class="metric-box">
+                <strong>{{ kitchen.ordersCount }}</strong>
+                <span>Orders</span>
+              </div>
+              <div class="metric-box revenue">
+                <strong>{{ kitchen.revenue | currency:'INR':'symbol':'1.0-0' }}</strong>
+                <span>Revenue</span>
+              </div>
+            </div>
+          </article>
+        }
+      </section>
+    }
+
+
+    @if (isSection('Hotels')) {
+      <div class="section-head">
+        <h1>Hotels</h1>
+        <button type="button" class="add-city-btn" (click)="openAddHotelModal()">
+          <i class="pi pi-plus"></i>
+          Add Hotel
+        </button>
+      </div>
+
+      <section class="kitchens-grid hotels-grid">
+        @for (hotel of hotelCards(); track hotel.hotelId) {
+          <article class="kitchen-card hotel-card">
+            <div class="kitchen-top">
+              <div class="kitchen-title-wrap">
+                <span class="kitchen-icon hotel-icon"><i class="pi pi-building"></i></span>
+                <div>
+                  <h2>{{ hotel.name }}</h2>
+                  <p>{{ hotel.cityName }} - {{ hotel.roomCount }} rooms</p>
+                  <p>Kitchen: {{ hotel.kitchenName }}</p>
+                </div>
+              </div>
+
+              <div class="card-actions">
+                <span class="active-chip" [class.inactive]="!hotel.isActive">{{ hotel.isActive ? 'Active' : 'Inactive' }}</span>
+                <button type="button" class="edit-city-btn" (click)="openEditHotelModal(hotel.hotelId)">
+                  <i class="pi pi-pencil"></i>
+                  Edit
+                </button>
+              </div>
+            </div>
+
+            <div class="city-metrics kitchen-metrics hotel-metrics">
+              <div class="metric-box">
+                <strong>{{ hotel.ordersCount }}</strong>
+                <span>Orders</span>
+              </div>
+              <div class="metric-box revenue">
+                <strong>{{ hotel.revenue | currency:'INR':'symbol':'1.0-0' }}</strong>
+                <span>Revenue</span>
+              </div>
+            </div>
+          </article>
+        }
+      </section>
+    }
+    @if (isSection('Menu')) {
+      <div class="section-head">
+        <div>
+          <h1>Menu Management</h1>
+          <p class="section-subtitle">Hotel-specific menu management</p>
+          <div class="menu-hotel-picker">
+            <label for="menuHotelSelect">Hotel</label>
+            <select id="menuHotelSelect" [value]="selectedMenuHotelId() ?? ''" (change)="selectMenuHotel(+$any($event.target).value || null)">
+              <option value="">Select hotel</option>
+              @for (hotel of menuHotelOptions(); track hotel.hotelId) {
+                <option [value]="hotel.hotelId">{{ hotel.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="menu-actions">
+          <button type="button" class="add-city-btn add-outline" (click)="openAddCategoryModal()">
+            <i class="pi pi-plus"></i>
+            Add Category
+          </button>
+          <button type="button" class="add-city-btn" (click)="openAddItemModal()">
+            <i class="pi pi-plus"></i>
+            Add Item
+          </button>
+        </div>
+      </div>
+
+      <section class="menu-groups">
+        @for (group of menuCategories(); track group.categoryId) {
+          <article class="menu-group-card">
+            <header class="menu-group-head">
+              <div class="group-title-wrap">
+                <i class="pi" [class]="menuCategoryIcon(group.categoryName)"></i>
+                <h2>{{ group.categoryName }}</h2>
+                <span>({{ group.items.length }} items)</span>
+              </div>
+
+              <div class="category-actions">
+                <button type="button" class="edit-city-btn" (click)="openEditCategoryModal(group.categoryId)">
+                  <i class="pi pi-pencil"></i>
+                  Edit
+                </button>
+                <button type="button" class="edit-city-btn delete-btn" (click)="deleteCategory(group.categoryId)">
+                  <i class="pi pi-trash"></i>
+                  Delete
+                </button>
+              </div>
+            </header>
+
+            <div class="menu-items-list">
+              @for (item of group.items; track item.itemId) {
+                <article class="menu-item-row" [class.item-off]="!item.isActive">
+                  <div class="item-left">
+                    <div class="item-name-line">
+                      <span class="veg-dot" [class.non-veg]="!item.isVeg"></span>
+                      <h3>{{ item.name }}</h3>
+                    </div>
+                    <p>{{ item.description || '-' }}</p>
+                    <small>~{{ item.prepTimeMinutes }} min</small>
+                  </div>
+
+                  <div class="item-right">
+                    <div class="item-actions-inline">
+                      <button type="button" class="edit-city-btn" (click)="openEditItemModal(item.itemId)">
+                        <i class="pi pi-pencil"></i>
+                        Edit
+                      </button>
+                      <button type="button" class="edit-city-btn delete-btn" (click)="deleteMenuItem(item.itemId)">
+                        <i class="pi pi-trash"></i>
+                        Delete
+                      </button>
+                    </div>
+                    <strong>{{ item.price | currency:'INR':'symbol':'1.0-0' }}</strong>
+                    <small class="inventory-pill" [class.low]="getMenuItemAvailableInventory(item) <= 5">Available: {{ getMenuItemAvailableInventory(item) }}</small>
+                    @if (getMenuItemReservedQuantity(item.itemId) > 0) {
+                      <small class="inventory-note">Reserved: {{ getMenuItemReservedQuantity(item.itemId) }}</small>
+                    }
+                    <div class="stock-controls">
+                      <button type="button" class="stock-btn" (click)="decreaseMenuItemAvailableInventory(item.itemId, 1)">-</button>
+                      <input type="number" min="0" [value]="getMenuItemAvailableInventory(item)" (change)="setMenuItemAvailableInventoryFromInput(item.itemId, ($any($event.target)).value)" />
+                      <button type="button" class="stock-btn" (click)="increaseMenuItemAvailableInventory(item.itemId, 1)">+</button>
+                    </div>
+                    <button
+                      type="button"
+                      class="item-live-toggle"
+                      [class.on]="item.isActive"
+                      [attr.aria-pressed]="item.isActive"
+                      (click)="toggleMenuItemStatus(item.itemId)"
+                    >
+                      <span class="toggle-knob"></span>
+                      <span class="toggle-label">{{ item.isActive ? 'On' : 'Off' }}</span>
+                    </button>
+                  </div>
+                </article>
+              }
+            </div>
+          </article>
+        }
+      </section>
+    }
+
+    @if (isSection('QR Codes')) {
+      <div class="section-head">
+        <div>
+          <h1>QR Code Generator</h1>
+          <p class="section-subtitle">Each hotel gets a unique QR code that routes guests directly to that hotel's ordering page.</p>
+        </div>
+      </div>
+
+      <section class="report-filters qr-filters">
+        <select [value]="qrCityFilter() ?? ''" (change)="qrCityFilter.set(+$any($event.target).value || null)">
+          <option value="">All Cities</option>
+          @for (city of cityCards(); track city.id) {
+            <option [value]="city.id">{{ city.name }}</option>
+          }
+        </select>
+        <input type="text" [value]="qrSearchInput()" (input)="qrSearchInput.set(($any($event.target)).value)" placeholder="Search hotel or URL" />
+      </section>
+
+      <section class="qr-grid">
+        @for (qr of qrCards(); track qr.hotelId) {
+          <article class="qr-card">
+            <img [src]="qr.qrCodeUrl" [alt]="qr.name + ' QR'" width="92" height="92" />
+            <div class="qr-info">
+              <h3>{{ qr.name }}</h3>
+              <p>{{ qr.cityName }}</p>
+              <a [href]="qr.routeUrl" target="_blank" rel="noopener">{{ qr.routeUrl }}</a>
+              <div class="qr-actions">
+                <button type="button" class="edit-city-btn" (click)="downloadQrPng(qr.qrCodeUrl, qr.name)"><i class="pi pi-download"></i> PNG</button>
+                <button type="button" class="edit-city-btn" (click)="downloadQrPdf(qr.qrCodeUrl, qr.name)"><i class="pi pi-file-pdf"></i> PDF</button>
+              </div>
+            </div>
+          </article>
+        }
+      </section>
+    }
+
+    @if (isSection('Reports')) {
+      <div class="section-head">
+        <h1>Revenue &amp; Order Reports</h1>
+      </div>
+
+      <section class="kpi-grid reports-kpi-grid">
+        <article class="kpi-card">
+          <strong>{{ reportTodayRevenue() | currency:'INR':'symbol':'1.0-0' }}</strong>
+          <span>Today Revenue</span>
+        </article>
+        <article class="kpi-card">
+          <strong>{{ reportWeekRevenue() | currency:'INR':'symbol':'1.0-0' }}</strong>
+          <span>This Week</span>
+        </article>
+        <article class="kpi-card">
+          <strong>{{ reportMonthRevenue() | currency:'INR':'symbol':'1.0-0' }}</strong>
+          <span>This Month</span>
+        </article>
+        <article class="kpi-card">
+          <strong>{{ reportAvgServiceTime() }} min</strong>
+          <span>Avg Service Time</span>
+        </article>
+      </section>
+
+      <section class="report-filters">
+        <select [value]="reportCityFilter() ?? ''" (change)="onReportCityChanged(+$any($event.target).value || null)">
+          <option value="">All Cities</option>
+          @for (city of cityCards(); track city.id) {
+            <option [value]="city.id">{{ city.name }}</option>
+          }
+        </select>
+
+        <select [value]="reportHotelFilter() ?? ''" (change)="reportHotelFilter.set(+$any($event.target).value || null)">
+          <option value="">All Hotels</option>
+          @for (hotel of reportHotelOptions(); track hotel.hotelId) {
+            <option [value]="hotel.hotelId">{{ hotel.name }}</option>
+          }
+        </select>
+
+        <select [value]="reportKitchenFilter() ?? ''" (change)="reportKitchenFilter.set(+$any($event.target).value || null)">
+          <option value="">All Kitchens</option>
+          @for (kitchen of kitchenCards(); track kitchen.kitchenId) {
+            <option [value]="kitchen.kitchenId">{{ kitchen.name }}</option>
+          }
+        </select>
+
+        <select [value]="reportStatusFilter()" (change)="reportStatusFilter.set(($any($event.target)).value)">
+          <option value="All">All Status</option>
+          <option value="Accepted">Accepted</option>
+          <option value="Preparing">Preparing</option>
+          <option value="Ready">Ready</option>
+          <option value="Delivered">Delivered</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+
+        <select [value]="reportPaymentFilter()" (change)="reportPaymentFilter.set(($any($event.target)).value)">
+          <option value="All">All Payments</option>
+          <option value="COD">COD</option>
+          <option value="UPI">UPI</option>
+          <option value="Card">Card</option>
+        </select>
+
+        <input type="month" [value]="reportMonthFilter()" (change)="reportMonthFilter.set(($any($event.target)).value)" />
+        <input type="date" [value]="reportDateFrom()" (change)="reportDateFrom.set(($any($event.target)).value)" />
+        <input type="date" [value]="reportDateTo()" (change)="reportDateTo.set(($any($event.target)).value)" />
+
+        <button type="button" class="edit-city-btn" (click)="clearReportFilters()">Clear Filters</button>
+      </section>
+
+      <section class="panel reports-table-panel">
+        <div class="table-head-inline">
+          <h2>Revenue by Hotel</h2>
+          <button type="button" class="edit-city-btn export-btn" (click)="exportReports()"><i class="pi pi-download"></i> Export</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Hotel</th>
+                <th>City</th>
+                <th>Order Date</th>
+                <th>Orders</th>
+                <th>Revenue</th>
+                <th>Avg Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of reportRevenueByHotel(); track row.hotelId) {
+                <tr>
+                  <td>{{ row.hotelName }}</td>
+                  <td>{{ row.cityName }}</td>
+                  <td>{{ row.orderDate }}</td>
+                  <td>{{ row.ordersCount }}</td>
+                  <td>{{ row.revenue | currency:'INR':'symbol':'1.0-0' }}</td>
+                  <td>{{ row.avgValue | currency:'INR':'symbol':'1.0-0' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel top-items-panel">
+        <h2>Top Ordered Items</h2>
+        <div class="top-items-list">
+          @for (entry of reportTopItems(); track entry.name; let i = $index) {
+            <div class="top-item-row">
+              <span class="rank">{{ i + 1 }}</span>
+              <span class="name">{{ entry.name }}</span>
+              <div class="bar"><span [style.width.%]="entry.widthPct"></span></div>
+              <span class="count">{{ entry.qty }} orders</span>
+              <span class="amount">{{ entry.revenue | currency:'INR':'symbol':'1.0-0' }}</span>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    @if (!isSection('Overview') && !isSection('Cities') && !isSection('Kitchens') && !isSection('Hotels') && !isSection('Menu') && !isSection('QR Codes') && !isSection('Reports')) {
+      <div class="placeholder-panel">
+        <h1>{{ selectedSection() }}</h1>
+        <p>This section UI will be added in next step.</p>
+      </div>
+    }
+  </main>
+
+  @if (showAddCityModal()) {
+    <div class="modal-backdrop" (click)="closeAddCityModal()"></div>
+    <section class="city-modal" role="dialog" aria-modal="true">
+      <header>
+        <div class="title-wrap">
+          <span class="title-icon"><i class="pi pi-map-marker"></i></span>
+          <h3>{{ isEditMode() ? 'Edit City' : 'Add New City' }}</h3>
+        </div>
+        <button type="button" class="close-btn" (click)="closeAddCityModal()">
+          <i class="pi pi-times"></i>
+        </button>
+      </header>
+
+      <label for="cityName">City Name</label>
+      <input
+        id="cityName"
+        type="text"
+        [value]="cityNameInput()"
+        (input)="cityNameInput.set(($any($event.target)).value); cityFormError.set('')"
+        placeholder="e.g., Mumbai"
+      />
+
+      <label for="cityState">State</label>
+      <input
+        id="cityState"
+        type="text"
+        [value]="cityStateInput()"
+        (input)="cityStateInput.set(($any($event.target)).value); cityFormError.set('')"
+        placeholder="e.g., Maharashtra"
+      />
+
+      <div class="status-row">
+        <span>Active Status</span>
+        <button type="button" class="toggle-btn" [class.on]="cityActiveInput()" (click)="toggleCityActive()">
+          <span></span>
+        </button>
+      </div>
+
+      @if (cityFormError()) {
+        <small class="form-error">{{ cityFormError() }}</small>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" (click)="closeAddCityModal()">Cancel</button>
+        <button type="button" class="btn-add" (click)="saveCity()">{{ isEditMode() ? 'Update City' : 'Add City' }}</button>
+      </div>
+    </section>
+  }
+
+  @if (showKitchenModal()) {
+    <div class="modal-backdrop" (click)="closeKitchenModal()"></div>
+    <section class="city-modal" role="dialog" aria-modal="true">
+      <header>
+        <div class="title-wrap">
+          <span class="title-icon"><i class="pi pi-shop"></i></span>
+          <h3>{{ isKitchenEditMode() ? 'Edit Kitchen' : 'Add New Kitchen' }}</h3>
+        </div>
+        <button type="button" class="close-btn" (click)="closeKitchenModal()">
+          <i class="pi pi-times"></i>
+        </button>
+      </header>
+
+      <label for="kitchenName">Kitchen Name</label>
+      <input
+        id="kitchenName"
+        type="text"
+        [value]="kitchenNameInput()"
+        (input)="kitchenNameInput.set(($any($event.target)).value); kitchenFormError.set('')"
+        placeholder="e.g., Mumbai Central Kitchen"
+      />
+
+      <label for="kitchenCity">City</label>
+      <select
+        id="kitchenCity"
+        [value]="kitchenCityIdInput() ?? ''"
+        (change)="kitchenCityIdInput.set(+$any($event.target).value || null); kitchenFormError.set('')"
+      >
+        <option value="">Select city</option>
+        @for (city of cityCards(); track city.id) {
+          <option [value]="city.id">{{ city.name }}</option>
+        }
+      </select>
+
+      <label for="kitchenAddress">Address</label>
+      <input
+        id="kitchenAddress"
+        type="text"
+        [value]="kitchenAddressInput()"
+        (input)="kitchenAddressInput.set(($any($event.target)).value); kitchenFormError.set('')"
+        placeholder="e.g., Andheri West, Mumbai"
+      />
+
+      <label for="kitchenPhone">Phone Number</label>
+      <input
+        id="kitchenPhone"
+        type="text"
+        [value]="kitchenPhoneInput()"
+        (input)="kitchenPhoneInput.set(($any($event.target)).value); kitchenFormError.set('')"
+        placeholder="e.g., 9876543210"
+      />
+
+      <label for="kitchenManager">Manager Name</label>
+      <input
+        id="kitchenManager"
+        type="text"
+        [value]="kitchenManagerInput()"
+        (input)="kitchenManagerInput.set(($any($event.target)).value); kitchenFormError.set('')"
+        placeholder="e.g., Ramesh Kumar"
+      />
+
+      <label for="kitchenLoginUsername">Kitchen Login Username</label>
+      <input
+        id="kitchenLoginUsername"
+        type="text"
+        [value]="kitchenLoginUsernameInput()"
+        (input)="kitchenLoginUsernameInput.set(($any($event.target)).value); kitchenFormError.set('')"
+        placeholder="e.g., kitchen10001"
+      />
+
+      <label for="kitchenLoginPassword">Kitchen Login Password</label>
+      <div class="credential-row">
+        <input
+          id="kitchenLoginPassword"
+          type="text"
+          [value]="kitchenLoginPasswordInput()"
+          (input)="kitchenLoginPasswordInput.set(($any($event.target)).value); kitchenFormError.set('')"
+          placeholder="Set a password or leave blank to keep the current one"
+        />
+        <button type="button" class="regen-btn" (click)="regenerateKitchenPassword()">Regenerate</button>
+        <button type="button" class="regen-btn" (click)="copyKitchenCredentials()">Copy Credentials</button>
+      </div>
+      <small class="credential-hint">Share these credentials with the mapped kitchen team. They are used on the kitchen login screen.</small>
+
+      <div class="status-row">
+        <span>Active Status</span>
+        <button type="button" class="toggle-btn" [class.on]="kitchenActiveInput()" (click)="toggleKitchenActive()">
+          <span></span>
+        </button>
+      </div>
+
+      @if (kitchenFormError()) {
+        <small class="form-error">{{ kitchenFormError() }}</small>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" (click)="closeKitchenModal()">Cancel</button>
+        <button type="button" class="btn-add btn-kitchen" (click)="saveKitchen()">{{ isKitchenEditMode() ? 'Update Kitchen' : 'Add Kitchen' }}</button>
+      </div>
+    </section>
+  }
+
+
+  @if (showHotelModal()) {
+    <div class="modal-backdrop" (click)="closeHotelModal()"></div>
+    <section class="city-modal hotel-modal" role="dialog" aria-modal="true">
+      <header>
+        <div class="title-wrap">
+          <span class="title-icon"><i class="pi pi-building"></i></span>
+          <h3>{{ isHotelEditMode() ? 'Edit Hotel' : 'Add New Hotel' }}</h3>
+        </div>
+        <button type="button" class="close-btn" (click)="closeHotelModal()">
+          <i class="pi pi-times"></i>
+        </button>
+      </header>
+
+      <div class="hotel-modal-body">
+        <div>
+          <label for="hotelName">Hotel Name</label>
+          <input
+            id="hotelName"
+            type="text"
+            [value]="hotelNameInput()"
+            (input)="hotelNameInput.set(($any($event.target)).value); hotelFormError.set('')"
+            placeholder="e.g., The Grand Andheri"
+          />
+
+          <label for="hotelCity">City</label>
+          <select
+            id="hotelCity"
+            [value]="hotelCityIdInput() ?? ''"
+            (change)="onHotelCityChanged(+$any($event.target).value || null); hotelFormError.set('')"
+          >
+            <option value="">Select city</option>
+            @for (city of cityCards(); track city.id) {
+              <option [value]="city.id">{{ city.name }}</option>
+            }
+          </select>
+
+          <label for="hotelKitchen">Assigned Kitchen</label>
+          <select
+            id="hotelKitchen"
+            [value]="hotelKitchenIdInput() ?? ''"
+            (change)="hotelKitchenIdInput.set(+$any($event.target).value || null); hotelFormError.set('')"
+          >
+            <option value="">Select kitchen</option>
+            @for (kitchen of filteredKitchensForHotelCity(); track kitchen.kitchenId) {
+              <option [value]="kitchen.kitchenId">{{ kitchen.name }}</option>
+            }
+          </select>
+
+          @if (!hotelCityIdInput()) {
+            <small class="field-note">Select a city first</small>
+          }
+
+          <label for="hotelAddress">Address</label>
+          <input
+            id="hotelAddress"
+            type="text"
+            [value]="hotelAddressInput()"
+            (input)="hotelAddressInput.set(($any($event.target)).value)"
+            placeholder="e.g., Andheri West, Mumbai 400058"
+          />
+
+          <label for="hotelRooms">Number of Rooms</label>
+          <input
+            id="hotelRooms"
+            type="number"
+            [value]="hotelRoomCountInput()"
+            (input)="hotelRoomCountInput.set(($any($event.target)).value); hotelFormError.set('')"
+            placeholder="e.g., 120"
+          />
+
+          <div class="status-row">
+            <span>Active Status</span>
+            <button type="button" class="toggle-btn" [class.on]="hotelActiveInput()" (click)="toggleHotelActive()">
+              <span></span>
+            </button>
+          </div>
+
+          <button type="button" class="btn-add btn-orange" (click)="generateHotelQrPreview()">Generate QR Code</button>
+        </div>
+
+        <div class="qr-preview-panel">
+          @if (hotelQrPreviewUrl()) {
+            <img [src]="hotelQrPreviewUrl()" alt="Hotel QR Preview" width="220" height="220" />
+            <p>{{ hotelQrPayload() }}</p>
+          } @else {
+            <span class="placeholder-icon"><i class="pi pi-qrcode"></i></span>
+            <p>Fill in hotel details and click "Generate QR Code" to preview</p>
+          }
+        </div>
+      </div>
+
+      @if (hotelFormError()) {
+        <small class="form-error">{{ hotelFormError() }}</small>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" (click)="closeHotelModal()">Cancel</button>
+        <button type="button" class="btn-add btn-kitchen" [disabled]="!hotelQrPreviewUrl()" (click)="saveHotel()">{{ isHotelEditMode() ? 'Update Hotel' : 'Add Hotel' }}</button>
+      </div>
+    </section>
+  }
+
+  @if (showCategoryModal()) {
+    <div class="modal-backdrop" (click)="closeCategoryModal()"></div>
+    <section class="city-modal" role="dialog" aria-modal="true">
+      <header>
+        <div class="title-wrap">
+          <span class="title-icon"><i class="pi pi-list"></i></span>
+          <h3>{{ editingCategoryId() ? 'Edit Category' : 'Add Category' }}</h3>
+        </div>
+        <button type="button" class="close-btn" (click)="closeCategoryModal()">
+          <i class="pi pi-times"></i>
+        </button>
+      </header>
+
+      <label for="categoryName">Category Name</label>
+      <input
+        id="categoryName"
+        type="text"
+        [value]="categoryNameInput()"
+        (input)="categoryNameInput.set(($any($event.target)).value); categoryFormError.set('')"
+        placeholder="e.g., Breakfast"
+      />
+
+      <label for="categorySort">Sort Order</label>
+      <input
+        id="categorySort"
+        type="number"
+        [value]="categorySortInput()"
+        (input)="categorySortInput.set(($any($event.target)).value); categoryFormError.set('')"
+        placeholder="1"
+      />
+
+      @if (categoryFormError()) {
+        <small class="form-error">{{ categoryFormError() }}</small>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" (click)="closeCategoryModal()">Cancel</button>
+        <button type="button" class="btn-add" (click)="saveCategory()">{{ editingCategoryId() ? 'Update Category' : 'Add Category' }}</button>
+      </div>
+    </section>
+  }
+  @if (showAddItemModal()) {
+    <div class="modal-backdrop" (click)="closeAddItemModal()"></div>
+    <section class="city-modal menu-item-modal" role="dialog" aria-modal="true">
+      <header>
+        <div class="title-wrap">
+          <span class="title-icon"><i class="pi pi-sparkles"></i></span>
+          <h3>{{ editingItemId() ? 'Edit Menu Item' : 'Add New Menu Item' }}</h3>
+        </div>
+        <button type="button" class="close-btn" (click)="closeAddItemModal()">
+          <i class="pi pi-times"></i>
+        </button>
+      </header>
+
+      <div class="form-grid two-col">
+        <div>
+          <label for="itemName">Item Name</label>
+          <input
+            id="itemName"
+            type="text"
+            [value]="itemNameInput()"
+            (input)="itemNameInput.set(($any($event.target)).value); itemFormError.set('')"
+            placeholder="e.g., Paneer Butter Masala"
+          />
+        </div>
+
+        <div>
+          <label for="itemCategory">Category</label>
+          <select
+            id="itemCategory"
+            (change)="itemCategoryIdInput.set(+$any($event.target).value || null); itemFormError.set('')"
+          >
+            <option value="" [selected]="itemCategoryIdInput() === null">Select category</option>
+            @for (category of menuCategories(); track category.categoryId) {
+              <option [value]="category.categoryId" [selected]="category.categoryId === itemCategoryIdInput()">{{ category.categoryName }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <label for="itemDescription">Description</label>
+      <textarea
+        id="itemDescription"
+        [value]="itemDescriptionInput()"
+        (input)="itemDescriptionInput.set(($any($event.target)).value); itemFormError.set('')"
+        placeholder="e.g., Cottage cheese in rich tomato-based gravy with aromatic spices"
+      ></textarea>
+
+      <div class="form-grid three-col">
+        <div>
+          <label for="itemPrice">Price (Rs)</label>
+          <input
+            id="itemPrice"
+            type="number"
+            [value]="itemPriceInput()"
+            (input)="itemPriceInput.set(($any($event.target)).value); itemFormError.set('')"
+            placeholder="e.g., 280"
+          />
+        </div>
+
+        <div>
+          <label for="itemPrep">Prep Time (min)</label>
+          <input
+            id="itemPrep"
+            type="number"
+            [value]="itemPrepTimeInput()"
+            (input)="itemPrepTimeInput.set(($any($event.target)).value); itemFormError.set('')"
+            placeholder="15"
+          />
+        </div>
+
+        <div>
+          <label for="itemFoodType">Food Type</label>
+          <select
+            id="itemFoodType"
+            [value]="itemFoodTypeInput()"
+            (change)="itemFoodTypeInput.set($any($event.target).value)"
+          >
+            <option value="Veg">Vegetarian</option>
+            <option value="NonVeg">Non-Vegetarian</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid one-col">
+        <div>
+          <label for="itemInventory">Opening Inventory</label>
+          <input
+            id="itemInventory"
+            type="number"
+            min="0"
+            [value]="itemInventoryInput()"
+            (input)="itemInventoryInput.set(($any($event.target)).value); itemFormError.set('')"
+            placeholder="e.g., 50"
+          />
+        </div>
+      </div>
+
+      <label for="itemImageUrl">Image URL</label>
+      <input
+        id="itemImageUrl"
+        type="text"
+        [value]="itemImageUrlInput()"
+        (input)="itemImageUrlInput.set(($any($event.target)).value)"
+        placeholder="https://images.unsplash.com/..."
+      />
+
+      <div class="kitchen-select-head">
+        <label>Kitchen Availability</label>
+        <div>
+          <button type="button" class="link-btn" (click)="selectAllItemKitchens()">Select All</button>
+          <button type="button" class="link-btn" (click)="deselectAllItemKitchens()">Deselect All</button>
+        </div>
+      </div>
+
+      <div class="kitchen-select-list">
+        @for (kitchen of kitchenCards(); track kitchen.kitchenId) {
+          <label class="kitchen-row">
+            <input type="checkbox" [checked]="isKitchenSelected(kitchen.kitchenId)" (change)="toggleItemKitchen(kitchen.kitchenId)" />
+            <div>
+              <strong>{{ kitchen.name }}</strong>
+              <span>{{ kitchen.addressLine || kitchen.cityName }}</span>
+            </div>
+          </label>
+        }
+      </div>
+
+      <div class="status-row">
+        <span>Active Status</span>
+        <button type="button" class="toggle-btn" [class.on]="itemActiveInput()" (click)="toggleItemActive()">
+          <span></span>
+        </button>
+      </div>
+
+      @if (itemFormError()) {
+        <small class="form-error">{{ itemFormError() }}</small>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" (click)="closeAddItemModal()">Cancel</button>
+        <button type="button" class="btn-add btn-green" (click)="saveMenuItem()">{{ editingItemId() ? 'Update Item' : 'Add Item' }}</button>
+      </div>
+    </section>
+  }
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

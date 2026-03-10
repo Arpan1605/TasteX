@@ -1,4 +1,4 @@
-import {
+﻿import {
   Category,
   City,
   Hotel,
@@ -96,6 +96,7 @@ export const DUMMY_ORDERS: Order[] = [
     hotelId: 101,
     kitchenId: 11,
     mobile: '9876543210',
+    roomNumber: '304',
     lines: [
       { itemId: 2002, quantity: 1, unitPrice: 390 },
       { itemId: 4002, quantity: 1, unitPrice: 170 }
@@ -113,6 +114,7 @@ export const DUMMY_ORDERS: Order[] = [
     hotelId: 102,
     kitchenId: 12,
     mobile: '9988776655',
+    roomNumber: '112',
     lines: [{ itemId: 2001, quantity: 1, unitPrice: 320 }],
     totalAmount: 320,
     paymentMethod: 'COD',
@@ -122,3 +124,4 @@ export const DUMMY_ORDERS: Order[] = [
     updatedAt: new Date(Date.now() - 10 * 60000).toISOString()
   }
 ];
+

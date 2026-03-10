@@ -8,8 +8,37 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HotelRoomOrdering.Api.Services;
 
-public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock) : IKitchenDashboardContract
+public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, IPasswordHashService passwordHashService) : IKitchenDashboardContract
 {
+    public async Task<ApiResponse<KitchenLoginResponse>> LoginAsync(KitchenLoginRequest request, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+        {
+            return new ApiResponse<KitchenLoginResponse>(false, null, new ApiError("LOGIN_INVALID", "Username and password are required."));
+        }
+
+        var normalizedUsername = request.Username.Trim().ToLowerInvariant();
+        var kitchen = await db.Kitchens
+            .AsNoTracking()
+            .Include(k => k.City)
+            .FirstOrDefaultAsync(k => k.LoginUsername == normalizedUsername, cancellationToken);
+
+        if (kitchen is null || !kitchen.IsActive || !passwordHashService.VerifyPassword(request.Password, kitchen.PasswordHash))
+        {
+            return new ApiResponse<KitchenLoginResponse>(false, null, new ApiError("LOGIN_INVALID", "Invalid kitchen credentials."));
+        }
+
+        return new ApiResponse<KitchenLoginResponse>(
+            true,
+            new KitchenLoginResponse(
+                kitchen.KitchenId,
+                kitchen.Name,
+                kitchen.LoginUsername,
+                kitchen.City.Name,
+                kitchen.IsActive),
+            null);
+    }
+
     public async Task<ApiResponse<KitchenOrdersResponse>> GetPaidOrdersAsync(KitchenOrdersQuery query, CancellationToken cancellationToken = default)
     {
         var baseQuery = db.Orders

@@ -1,61 +1,230 @@
-<div class="dashboard-page">
-  <div class="topbar">
-    <h2>Kitchen Dashboard</h2>
-    <a pButton [routerLink]="'/guest/blr-gp-01'" label="Back to Guest Flow" severity="contrast" size="small"></a>
-  </div>
+<div class="kd-page">
+  @if (!selectedKitchenId()) {
+    <section class="kitchen-login-shell">
+      <article class="kitchen-login-card">
+        <div class="login-badge"><i class="pi pi-shop"></i></div>
+        <h1>Kitchen Login</h1>
+        <p>Use the kitchen credentials issued from Admin > Kitchens.</p>
 
-  <p-card>
-    <ng-template pTemplate="title">Kitchen Orders</ng-template>
-    <ng-template pTemplate="subtitle">COD and successfully confirmed online orders are visible</ng-template>
+        <label for="kitchenUsername">Username</label>
+        <input id="kitchenUsername" type="text" [ngModel]="kitchenLoginUsername()" (ngModelChange)="kitchenLoginUsername.set($event); loginError.set('')" placeholder="Kitchen login username" />
 
-    <div class="filter-wrap">
-      <label for="hotelFilter">Filter by Hotel</label>
-      <p-select
-        inputId="hotelFilter"
-        [options]="hotels"
-        [showClear]="true"
-        [ngModel]="selectedHotelId()"
-        (ngModelChange)="setHotelFilter($event)"
-        optionLabel="label"
-        optionValue="value"
-        placeholder="All hotels"
-      ></p-select>
-    </div>
+        <label for="kitchenPassword">Password</label>
+        <input id="kitchenPassword" type="password" [ngModel]="kitchenLoginPassword()" (ngModelChange)="kitchenLoginPassword.set($event); loginError.set('')" placeholder="Kitchen password" />
 
-    <p-table [value]="rows()" [tableStyle]="{ 'min-width': '64rem' }" [stripedRows]="true" [paginator]="true" [rows]="8">
-      <ng-template pTemplate="header">
-        <tr>
-          <th>Order No</th>
-          <th>Hotel</th>
-          <th>Mobile</th>
-          <th>Total</th>
-          <th>Status</th>
-          <th>Service Time</th>
-          <th>Update Status</th>
-        </tr>
-      </ng-template>
-      <ng-template pTemplate="body" let-row>
-        <tr>
-          <td>{{ row.orderNo }}</td>
-          <td>{{ row.hotelName }}</td>
-          <td>{{ row.mobile }}</td>
-          <td>{{ row.totalAmount | currency:'INR':'symbol':'1.0-0' }}</td>
-          <td><p-tag [value]="row.status" [severity]="statusSeverity(row.status)"></p-tag></td>
-          <td>{{ row.serviceTimeMins }} mins</td>
-          <td>
-            <p-selectbutton
-              [options]="statusOptions"
-              optionLabel="label"
-              optionValue="value"
-              [ngModel]="row.status"
-              (ngModelChange)="updateStatus(row.id, $event)"
-              size="small"
-            ></p-selectbutton>
-          </td>
-        </tr>
-      </ng-template>
-    </p-table>
-  </p-card>
+        @if (loginError()) {
+          <small class="error">{{ loginError() }}</small>
+        }
+
+        <button type="button" class="login-btn" (click)="loginToKitchen()">Open Kitchen Dashboard</button>
+      </article>
+    </section>
+  } @else {
+    <header class="kd-header">
+      <div class="brand-wrap">
+        <div class="brand-icon"><i class="pi pi-shop"></i></div>
+        <div>
+          <h1>{{ kitchenTitle() }}</h1>
+          <p>{{ kitchenSubtitle() }}</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button type="button" class="notify-chip" [class.hot]="highlightNew() || unreadNew() > 0" (click)="openNewNotifications()">
+          <i class="pi pi-bell"></i> {{ chipNewCount() }} new
+        </button>
+        <button type="button" class="logout-btn" (click)="logoutKitchen()">
+          <i class="pi pi-sign-out"></i>
+          Switch Kitchen
+        </button>
+        <a pButton [routerLink]="'/guest/blr-gp-01'" icon="pi pi-arrow-right" text="true" rounded="true" class="back-link" aria-label="Guest"></a>
+      </div>
+    </header>
+
+    @if (actionMessage()) {
+      <div class="action-msg">{{ actionMessage() }}</div>
+    }
+
+    @if (notificationToasts().length > 0) {
+      <section class="toast-stack" aria-live="polite">
+        <div class="toast-head">
+          <strong>New Orders</strong>
+          <button type="button" (click)="clearNotifications()">Clear</button>
+        </div>
+
+        @for (toast of notificationToasts(); track toast.id) {
+          <article class="toast-item">
+            <i class="pi pi-bell"></i>
+            <div>
+              <strong>New order received</strong>
+              <p>{{ toast.message }}</p>
+            </div>
+            <button type="button" class="toast-close" (click)="closeNotification(toast.id)">
+              <i class="pi pi-times"></i>
+            </button>
+          </article>
+        }
+      </section>
+    }
+
+    <section class="metrics-grid">
+      <article class="metric-card card-new"><strong>{{ stats().newCount }}</strong><span>New</span></article>
+      <article class="metric-card card-active"><strong>{{ stats().activeCount }}</strong><span>Active</span></article>
+      <article class="metric-card card-done"><strong>{{ stats().doneCount }}</strong><span>Done</span></article>
+      <article class="metric-card card-avg"><strong>{{ stats().avgTime }}m</strong><span>Avg Time</span></article>
+    </section>
+
+    <section class="filters-card">
+      <div class="select-wrap">
+        <select [ngModel]="selectedHotelId() ?? ''" (ngModelChange)="setHotelFilter($event)">
+          <option value="">All Hotels</option>
+          @for (hotel of kitchenHotels(); track hotel.id) {
+            <option [value]="hotel.id">{{ hotel.name }}</option>
+          }
+        </select>
+        <i class="pi pi-chevron-down"></i>
+      </div>
+
+      <div class="queue-row">
+        @for (option of queueOptions; track option) {
+          <button type="button" class="queue-chip" [class.active]="selectedQueue() === option" (click)="setQueue(option)">
+            {{ option }}
+          </button>
+        }
+      </div>
+    </section>
+
+    <section class="inventory-card">
+      <div class="inventory-head">
+        <div>
+          <h2>Live Inventory</h2>
+          <p>Read only view synced from Admin Dashboard inventory</p>
+        </div>
+      </div>
+
+      <div class="inventory-grid">
+        @for (item of inventoryRows(); track item.itemId) {
+          <article class="inventory-item">
+            <div class="inventory-title-row">
+              <span class="food-dot" [class.veg]="item.isVeg" [class.nonveg]="!item.isVeg"></span>
+              <strong>{{ item.name }}</strong>
+            </div>
+            <div class="inventory-stats">
+              <span>Available: {{ item.available }}</span>
+              <small>Base: {{ item.baseInventory }}</small>
+            </div>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="orders-list">
+      @if (filteredRows().length === 0) {
+        <article class="empty-card">
+          <h3>No orders found</h3>
+          <p>New guest orders for this kitchen will appear here automatically.</p>
+        </article>
+      } @else {
+        @for (row of filteredRows(); track row.id) {
+          <article class="order-card" [class.new-border]="isNewOrder(row)" (click)="toggleOrder(row.id)">
+            <div class="left-icon" [class]="'left-icon ' + iconClass(row)">
+              <i class="pi" [class.pi-bell]="isNewOrder(row)" [class.pi-clock]="statusClass(row) === 'preparing'" [class.pi-check-circle]="statusClass(row) === 'accepted'" [class.pi-box]="statusClass(row) === 'ready'" [class.pi-check-square]="statusClass(row) === 'delivered'" [class.pi-times-circle]="statusClass(row) === 'rejected'"></i>
+            </div>
+
+            <div class="order-main">
+              <div class="order-line1">
+                <strong>{{ row.orderNo }}</strong>
+                <button type="button" class="status-pill" [class]="'status-pill ' + statusClass(row)" (click)="$event.stopPropagation()">{{ statusLabel(row) }}</button>
+              </div>
+              <p>{{ row.hotelName }} • Room {{ row.roomNumber || '-' }}</p>
+            </div>
+
+            <div class="order-right">
+              <strong>{{ row.totalAmount | currency:'INR':'symbol':'1.0-0' }}</strong>
+              <span>{{ timeAgo(elapsedMinutes(row.createdAt)) }}</span>
+            </div>
+
+            @if (isExpanded(row.id)) {
+              <div class="order-details" (click)="$event.stopPropagation()">
+                @for (line of row.lines; track line.itemId) {
+                  <div class="line-item">
+                    <div class="line-left">
+                      <span class="food-dot" [class.veg]="itemIsVeg(line.itemId)" [class.nonveg]="!itemIsVeg(line.itemId)"></span>
+                      <span>{{ itemName(line.itemId) }} ({{ line.quantity }} pcs)</span>
+                    </div>
+                    <span class="line-qty">x {{ line.quantity }}</span>
+                  </div>
+                }
+
+                <p class="placed-at">Placed: {{ placedTime(row.createdAt) }}</p>
+
+                @if (shouldShowAcceptedTime(row)) {
+                  <p class="placed-at">Accepted: {{ placedTime(row.acceptedAt || row.createdAt) }}</p>
+                }
+
+                @if (statusClass(row) === 'accepted') {
+                  <div class="decision-row">
+                    <button type="button" class="btn-start" (click)="startPreparing(row.id)">Start Preparing</button>
+                    <button type="button" class="btn-reject" (click)="openRejectDialog(row.id)">Reject</button>
+                  </div>
+                }
+
+                @if (statusClass(row) === 'preparing') {
+                  <p class="placed-at">Preparing started: {{ placedTime(row.preparingStartedAt || row.updatedAt) }}</p>
+                  <div class="decision-row one">
+                    <button type="button" class="btn-start" (click)="markReady(row.id)">Mark Ready</button>
+                  </div>
+                }
+
+                @if (statusClass(row) === 'ready') {
+                  <p class="placed-at">Preparing started: {{ placedTime(row.preparingStartedAt || row.updatedAt) }}</p>
+                  <p class="placed-at">Ready: {{ placedTime(row.readyAt || row.updatedAt) }}</p>
+                  <div class="decision-row one">
+                    <button type="button" class="btn-start" (click)="markDelivered(row.id)">Mark Delivered</button>
+                  </div>
+                }
+
+                @if (statusClass(row) === 'delivered') {
+                  <p class="placed-at">Preparing started: {{ placedTime(row.preparingStartedAt || row.updatedAt) }}</p>
+                  <p class="placed-at">Ready: {{ placedTime(row.readyAt || row.updatedAt) }}</p>
+                  <p class="placed-at">Delivered: {{ placedTime(row.deliveredAt || row.updatedAt) }} ({{ deliveredTotalMinutes(row.createdAt, row.deliveredAt || row.updatedAt) }}m total)</p>
+                }
+
+                @if (isNewOrder(row)) {
+                  <div class="decision-row">
+                    <button type="button" class="btn-accept" (click)="acceptOrder(row.id)">Accept</button>
+                    <button type="button" class="btn-reject" (click)="openRejectDialog(row.id)">Reject</button>
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        }
+      }
+    </section>
+  }
+
+  @if (rejectDialogOrderId()) {
+    <div class="modal-backdrop" (click)="closeRejectDialog()"></div>
+    <section class="reject-modal" role="dialog" aria-modal="true">
+      <h3>Reject Order</h3>
+      <p>Are you sure you want to reject this order?</p>
+      <label for="rejectReason">Reason for Rejection</label>
+      <textarea
+        id="rejectReason"
+        rows="4"
+        [ngModel]="rejectionReason()"
+        (ngModelChange)="rejectionReason.set($event); rejectionReasonError.set('')"
+        placeholder="Enter reason"
+      ></textarea>
+      @if (rejectionReasonError()) {
+        <small class="error">{{ rejectionReasonError() }}</small>
+      }
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" (click)="closeRejectDialog()">Cancel</button>
+        <button type="button" class="btn-confirm-reject" (click)="submitReject()">Confirm Reject</button>
+      </div>
+    </section>
+  }
 </div>
-
 

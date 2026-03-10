@@ -3,9 +3,11 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build",
-    "watch": "ng build --watch --configuration development",
+    "start": "node --max-old-space-size=4096 ./node_modules/@angular/cli/bin/ng serve --proxy-config proxy.conf.json",
+    "build": "node --max-old-space-size=4096 ./node_modules/@angular/cli/bin/ng build",
+    "build:development": "node --max-old-space-size=3072 ./node_modules/@angular/cli/bin/ng build --configuration development",
+    "build:production": "node --max-old-space-size=4096 ./node_modules/@angular/cli/bin/ng build --configuration production",
+    "watch": "node --max-old-space-size=3072 ./node_modules/@angular/cli/bin/ng build --watch --configuration development",
     "test": "ng test",
     "serve:ssr:hotel-room-ordering": "node dist/hotel-room-ordering/server/server.mjs"
   },
@@ -40,3 +42,4 @@
     "vitest": "^4.0.8"
   }
 }
+

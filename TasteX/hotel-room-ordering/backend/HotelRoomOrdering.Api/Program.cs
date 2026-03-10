@@ -19,10 +19,12 @@ builder.Services.AddDbContext<OrderingDbContext>(options =>
 
 builder.Services.AddScoped<IClock, SystemClock>();
 builder.Services.AddScoped<IHashService, Sha256HashService>();
+builder.Services.AddScoped<IPasswordHashService, Pbkdf2PasswordHashService>();
 builder.Services.AddScoped<IGuestOrderingContract, GuestOrderingService>();
 builder.Services.AddScoped<IKitchenDashboardContract, KitchenDashboardService>();
 builder.Services.AddScoped<IPaymentContract, PaymentService>();
 builder.Services.AddScoped<IWebhookContract, WebhookService>();
+builder.Services.AddScoped<IAdminManagementContract, AdminManagementService>();
 
 var app = builder.Build();
 
@@ -35,3 +37,5 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.MapControllers();
 app.Run();
+
+

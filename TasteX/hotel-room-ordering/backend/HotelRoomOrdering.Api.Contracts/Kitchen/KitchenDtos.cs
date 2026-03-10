@@ -2,6 +2,17 @@ using HotelRoomOrdering.Api.Contracts.Enums;
 
 namespace HotelRoomOrdering.Api.Contracts.Kitchen;
 
+public sealed record KitchenLoginRequest(
+    string Username,
+    string Password);
+
+public sealed record KitchenLoginResponse(
+    long KitchenId,
+    string KitchenName,
+    string LoginUsername,
+    string CityName,
+    bool IsActive);
+
 public sealed record KitchenOrderLineDto(
     long ItemId,
     string ItemName,

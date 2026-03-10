@@ -1,0 +1,11 @@
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\bin\Debug\net8.0\HotelRoomOrdering.Api.Contracts.deps.json
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\bin\Debug\net8.0\HotelRoomOrdering.Api.Contracts.dll
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\bin\Debug\net8.0\HotelRoomOrdering.Api.Contracts.pdb
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\HotelRoomOrdering.Api.Contracts.GeneratedMSBuildEditorConfig.editorconfig
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\HotelRoomOrdering.Api.Contracts.AssemblyInfoInputs.cache
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\HotelRoomOrdering.Api.Contracts.AssemblyInfo.cs
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\HotelRoomOrdering.Api.Contracts.csproj.CoreCompileInputs.cache
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\HotelRoomOrdering.Api.Contracts.dll
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\refint\HotelRoomOrdering.Api.Contracts.dll
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\HotelRoomOrdering.Api.Contracts.pdb
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\ref\HotelRoomOrdering.Api.Contracts.dll

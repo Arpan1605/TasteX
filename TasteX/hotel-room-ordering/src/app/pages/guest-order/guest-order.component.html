@@ -1,136 +1,320 @@
-<div class="page">
+﻿<div class="verify-page">
   @if (hotel(); as selectedHotel) {
-    <div class="topbar">
-      <h2>QR Room Ordering</h2>
-      <a pButton [routerLink]="'/kitchen'" size="small" label="Kitchen Dashboard" severity="contrast"></a>
-    </div>
-
-    <p-card>
-      <ng-template pTemplate="title">{{ selectedHotel.name }}</ng-template>
-      <ng-template pTemplate="subtitle">Hotel specific QR route: {{ selectedHotel.code }}</ng-template>
-      <div class="context-grid">
-        <p><strong>City:</strong> {{ hotelContext().cityName }}</p>
-        <p><strong>Mapped Kitchen:</strong> {{ hotelContext().kitchenName }}</p>
-        <p><strong>Order Mode:</strong> OTP verified + Cash on Delivery (COD)</p>
-      </div>
-    </p-card>
-
-    <p-card>
-      <ng-template pTemplate="title">OTP Verification</ng-template>
-      <ng-template pTemplate="subtitle">Mobile OTP with 5 min expiry</ng-template>
-
-      <div class="otp-wrap">
-        <div class="field-wrap">
-          <label for="mobile">Mobile Number</label>
-          <input id="mobile" pInputText [ngModel]="mobile()" (ngModelChange)="mobile.set($event)" maxlength="10" placeholder="Enter 10 digit number" />
+    @if (!showMenu()) {
+      <header class="top-bar">
+        <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back"></button>
+        <div>
+          <h1>{{ selectedHotel.name }}</h1>
+          <p>{{ hotelContext().cityName }} • Verify to Order</p>
         </div>
-        <button pButton label="Send OTP" (click)="sendOtp()"></button>
+      </header>
 
-        <div class="field-wrap">
-          <label for="otp">OTP</label>
-          <input id="otp" pInputText [ngModel]="otp()" (ngModelChange)="otp.set($event)" maxlength="6" placeholder="Enter OTP" />
-        </div>
-        <button pButton label="Verify OTP" (click)="verifyOtp()" severity="success"></button>
+      <main class="verify-shell">
+        <section class="hotel-badge">
+          <div class="hotel-icon">
+            <i class="pi pi-building"></i>
+          </div>
+          <div>
+            <h2>{{ selectedHotel.name }}</h2>
+            <p>Andheri West, Mumbai 400058</p>
+          </div>
+        </section>
+
+        <section class="stepper">
+          <div class="step" [class.done]="stepDone(1)" [class.current]="currentStep() === 1">
+            <span>{{ stepDone(1) ? '✓' : '1' }}</span><label>Room</label>
+          </div>
+          <div class="line" [class.active]="stepDone(1)"></div>
+          <div class="step" [class.done]="stepDone(2)" [class.current]="currentStep() === 2">
+            <span>{{ stepDone(2) ? '✓' : '2' }}</span><label>Mobile</label>
+          </div>
+          <div class="line" [class.active]="stepDone(2)"></div>
+          <div class="step" [class.done]="stepDone(3)" [class.current]="currentStep() === 3">
+            <span>{{ stepDone(3) ? '✓' : '3' }}</span><label>Verify</label>
+          </div>
+        </section>
+
+        <section class="card-box">
+          @if (currentStep() === 1) {
+            <div class="mini-icon">
+              <i class="pi pi-home"></i>
+            </div>
+            <h3>Enter Room Number</h3>
+            <p class="sub">Please enter your room number to continue</p>
+            <input class="big-input" placeholder="e.g. 304" [ngModel]="roomNumber()" (ngModelChange)="roomNumber.set($event)" />
+            @if (roomError()) {
+              <small class="err">{{ roomError() }}</small>
+            }
+            <button class="cta" (click)="continueToMobile()">Continue</button>
+          }
+
+          @if (currentStep() === 2) {
+            <div class="mini-icon">
+              <i class="pi pi-phone"></i>
+            </div>
+            <h3>Verify Mobile Number</h3>
+            <p class="sub">Room: <strong>{{ roomNumber() }}</strong></p>
+            <p class="sub">We'll send a 6-digit OTP to your mobile</p>
+            <div class="phone-wrap">
+              <span>+91</span>
+              <input placeholder="10-digit mobile number" [ngModel]="mobile()" (ngModelChange)="mobile.set($event)" />
+            </div>
+            @if (mobileError()) {
+              <small class="err">{{ mobileError() }}</small>
+            }
+            <button class="cta" (click)="sendOtp()">Send OTP</button>
+          }
+
+          @if (currentStep() === 3) {
+            <div class="mini-icon green">
+              <i class="pi pi-shield"></i>
+            </div>
+            <h3>Enter OTP</h3>
+            <p class="sub">Sent to <strong>+91 {{ mobile() }}</strong></p>
+            <p class="sub muted"><i class="pi pi-clock"></i> Expires in {{ timerText() }}</p>
+            <div class="otp-demo">{{ otpHint() }}</div>
+            <div class="otp-row">
+              @for (digit of otpDigits(); track $index) {
+                <input class="otp-cell" maxlength="1" inputmode="numeric" [ngModel]="digit" (ngModelChange)="onOtpInput($index, $event)" />
+              }
+            </div>
+            @if (otpError()) {
+              <small class="err">{{ otpError() }}</small>
+            }
+            <button class="cta" (click)="verifyOtp()">Verify & Continue</button>
+            <button class="ghost" [disabled]="remainingSeconds() > 0" (click)="sendOtp()">Resend OTP</button>
+          }
+        </section>
+      </main>
+    } @else {
+      <div class="app-strip">
+        <span>QR Hotel Ordering System</span>
+        <i class="pi pi-chevron-down"></i>
       </div>
 
-      @if (otpHint()) {
-        <p-message severity="info" variant="simple">{{ otpHint() }}</p-message>
-      }
+      @if (showOrderPlaced()) {
+        <section class="menu-top cart-top">
+          <div class="title-wrap">
+            <div class="menu-head-copy">
+              <h1>Order Placed</h1>
+              <p>Redirecting to menu...</p>
+            </div>
+          </div>
+        </section>
 
-      @if (otpError()) {
-        <p-message severity="error" variant="simple">{{ otpError() }}</p-message>
-      }
-
-      @if (otpVerified()) {
-        <p-message severity="success" variant="simple">OTP verified. You can place COD orders now.</p-message>
-      }
-    </p-card>
-
-    @if (otpVerified()) {
-      <div class="menu-layout">
-        <p-card>
-          <ng-template pTemplate="title">Menu</ng-template>
-          <ng-template pTemplate="subtitle">Accordion category browsing with veg/non-veg filters</ng-template>
-
-          <div class="preference">
-            <span>Filter:</span>
-            <p-selectbutton
-              [options]="preferenceOptions"
-              optionLabel="label"
-              optionValue="value"
-              [ngModel]="selectedPreference()"
-              (ngModelChange)="setPreference($event)"
-            ></p-selectbutton>
+        <section class="cart-shell success-shell">
+          <article class="bill-card success-card">
+            <div class="success-icon"><i class="pi pi-check-circle"></i></div>
+            <h3>Order Confirmed</h3>
+            <p>Your COD order has been placed successfully.</p>
+          </article>
+        </section>
+      } @else if (!showCart()) {
+        <section class="menu-top">
+          <div class="title-wrap">
+            <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back"></button>
+            <div class="menu-head-copy">
+              <h1>{{ selectedHotel.name }}</h1>
+              <p>Room {{ roomNumber() }} • {{ hotelContext().cityName }}</p>
+            </div>
+            @if (cartItemCount() > 0) {
+              <button type="button" class="top-cart-btn" aria-label="Cart" (click)="openCart()">
+                <i class="pi pi-shopping-cart"></i>
+                <span>{{ cartItemCount() }}</span>
+                <em>{{ cartItemCount() }}</em>
+              </button>
+            }
           </div>
 
-          <p-accordion [multiple]="true" [value]="[1,2]">
-            @for (section of menu(); track section.category.id) {
-              <p-accordion-panel [value]="section.category.id">
-                <p-accordion-header>{{ section.category.name }}</p-accordion-header>
-                <p-accordion-content>
+          <div class="search-box">
+            <i class="pi pi-search"></i>
+            <input
+              type="text"
+              placeholder="Search items..."
+              [ngModel]="searchTerm()"
+              (ngModelChange)="searchTerm.set($event)"
+            />
+          </div>
+
+          <div class="filter-row">
+            <button type="button" class="chip" [class.active]="selectedPreference() === 'All'" (click)="setPreference('All')">All</button>
+            <button type="button" class="chip" [class.active]="selectedPreference() === 'Veg'" (click)="setPreference('Veg')">Pure Veg</button>
+            <button type="button" class="chip" [class.active]="selectedPreference() === 'NonVeg'" (click)="setPreference('NonVeg')">Non-Veg</button>
+          </div>
+        </section>
+
+        <section class="menu-shell">
+          @for (section of filteredMenu(); track section.category.id) {
+            <article class="menu-panel">
+              <button type="button" class="menu-panel-header" (click)="toggleCategory(section.category.id)">
+                <div class="header-row">
+                  <div class="category-head">
+                    <span class="cat-icon">🍽</span>
+                    <span>{{ section.category.name }}</span>
+                    <span class="count-pill">{{ section.items.length }}</span>
+                  </div>
+                  <i class="pi" [class.pi-chevron-up]="isCategoryOpen(section.category.id)" [class.pi-chevron-down]="!isCategoryOpen(section.category.id)"></i>
+                </div>
+              </button>
+
+              @if (isCategoryOpen(section.category.id)) {
+                <div class="menu-panel-content">
                   @for (item of section.items; track item.id) {
-                    <div class="menu-item">
-                      <div>
-                        <div class="item-head">
-                          <strong>{{ item.name }}</strong>
-                          <p-tag [value]="item.isVeg ? 'VEG' : 'NON-VEG'" [severity]="item.isVeg ? 'success' : 'warn'"></p-tag>
+                    <div class="item-row">
+                      <div class="item-info">
+                        <div class="title-line">
+                          <span class="food-dot" [class.veg]="item.isVeg" [class.nonveg]="!item.isVeg"></span>
+                          <h3>{{ item.name }}</h3>
                         </div>
-                        <small>{{ item.description }}</small>
+                        <p>{{ item.description }}</p>
+                        <div class="price-line">
+                          <strong>{{ item.price | currency:'INR':'symbol':'1.0-0' }}</strong>
+                          <span>{{ itemEta(item.id) }}</span>
+                        </div>
                       </div>
 
-                      <div class="item-actions">
-                        <strong>{{ item.price | currency:'INR':'symbol':'1.0-0' }}</strong>
-                        <button pButton label="Add" size="small" (click)="addToCart(item.id)"></button>
+                      <div class="item-right">
+                        <img [src]="itemImage(item.id)" [alt]="item.name" />
+                        @if (cartQuantity(item.id) === 0) {
+                          <button type="button" class="add-btn" (click)="addToCart(item.id)">+ Add</button>
+                        } @else {
+                          <div class="qty-wrap">
+                            <button type="button" class="qty-btn" (click)="decreaseQuantity(item.id)">−</button>
+                            <span>{{ cartQuantity(item.id) }}</span>
+                            <button type="button" class="qty-btn" (click)="increaseQuantity(item.id)">+</button>
+                          </div>
+                        }
                       </div>
                     </div>
-                    <p-divider></p-divider>
                   }
-                </p-accordion-content>
-              </p-accordion-panel>
-            }
-          </p-accordion>
-        </p-card>
-
-        <p-card>
-          <ng-template pTemplate="title">Cart & Checkout</ng-template>
-          <ng-template pTemplate="subtitle">COD flow (payment at delivery)</ng-template>
-
-          @if (cartItems().length === 0) {
-            <p>No items in cart.</p>
-          } @else {
-            @for (line of cartItems(); track line.itemId) {
-              <div class="cart-line">
-                <div>
-                  <strong>{{ line.item.name }}</strong>
-                  <div>{{ line.item.price | currency:'INR':'symbol':'1.0-0' }}</div>
                 </div>
+              }
+            </article>
+          }
+        </section>
 
-                <div class="qty-box">
-                  <button pButton icon="pi pi-minus" size="small" text="true" (click)="decrease(line.itemId, line.quantity)"></button>
-                  <span>{{ line.quantity }}</span>
-                  <button pButton icon="pi pi-plus" size="small" text="true" (click)="increase(line.itemId, line.quantity)"></button>
-                </div>
-              </div>
-              <p-divider></p-divider>
-            }
-
-            <div class="checkout-total">
-              <strong>Total: {{ cartTotal() | currency:'INR':'symbol':'1.0-0' }}</strong>
-              <button pButton label="Place COD Order" severity="success" (click)="checkout()"></button>
+        @if (cartItemCount() > 0) {
+          <button type="button" class="sticky-cart" (click)="openCart()">
+            <div class="cart-left">
+              <span class="cart-count">{{ cartItemCount() }}</span>
+              <strong>View Cart</strong>
             </div>
-          }
+            <p>{{ cartTotal() | currency:'INR':'symbol':'1.0-0' }}</p>
+          </button>
+        }
+      } @else {
+        @if (!showPayment()) {
+          <section class="menu-top cart-top">
+            <div class="title-wrap">
+              <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back" (click)="backToMenu()"></button>
+              <div class="menu-head-copy">
+                <h1>Your Cart</h1>
+                <p>Room {{ roomNumber() }} • {{ selectedHotel.name }}</p>
+              </div>
+              <button type="button" class="icon-link" (click)="clearCart()" aria-label="Clear cart">
+                <i class="pi pi-trash"></i>
+              </button>
+            </div>
+          </section>
 
-          @if (checkoutMessage()) {
-            <p-message [severity]="checkoutSuccess() ? 'success' : 'error'" variant="simple">{{ checkoutMessage() }}</p-message>
-          }
-        </p-card>
-      </div>
+          <section class="cart-shell">
+            @for (line of cartItems(); track line.itemId) {
+              <article class="cart-item-card">
+                <div class="cart-item-left">
+                  <span class="food-dot" [class.veg]="line.item.isVeg" [class.nonveg]="!line.item.isVeg"></span>
+                  <div>
+                    <h3>{{ line.item.name }}</h3>
+                    <p>{{ line.item.price | currency:'INR':'symbol':'1.0-0' }}</p>
+                  </div>
+                </div>
+
+                <div class="cart-item-right">
+                  <div class="qty-wrap cart-qty">
+                    <button type="button" class="qty-btn light" (click)="decreaseQuantity(line.itemId)">−</button>
+                    <span>{{ line.quantity }}</span>
+                    <button type="button" class="qty-btn light" (click)="increaseQuantity(line.itemId)">+</button>
+                    <button type="button" class="qty-btn danger" (click)="removeFromCart(line.itemId)">
+                      <i class="pi pi-trash"></i>
+                    </button>
+                  </div>
+                  <strong>{{ lineTotal(line.itemId) | currency:'INR':'symbol':'1.0-0' }}</strong>
+                </div>
+              </article>
+            }
+
+            <article class="bill-card">
+              <h3>Bill Summary</h3>
+              <div class="bill-row"><span>Subtotal ({{ cartItemCount() }} items)</span><span>{{ cartTotal() | currency:'INR':'symbol':'1.0-0' }}</span></div>
+              <div class="bill-row"><span>GST (18%)</span><span>{{ gstAmount() | currency:'INR':'symbol':'1.0-0' }}</span></div>
+              <div class="bill-row"><span>Delivery charges</span><span class="free">Free</span></div>
+              <div class="bill-row total"><span>Total Payable</span><strong>{{ payableTotal() | currency:'INR':'symbol':'1.0-0' }}</strong></div>
+            </article>
+
+            <div class="note-box">
+              Pay on Delivery enabled - Review order before final confirmation
+            </div>
+          </section>
+
+          <section class="cart-footer">
+            <div class="cart-footer-row">
+              <span>{{ cartItemCount() }} items</span>
+              <strong>Total: {{ payableTotal() | currency:'INR':'symbol':'1.0-0' }}</strong>
+            </div>
+            <button type="button" class="cart-cta" (click)="openPayment()">Proceed to Payment</button>
+          </section>
+        } @else {
+          <section class="menu-top cart-top">
+            <div class="title-wrap">
+              <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back" (click)="backToCart()"></button>
+              <div class="menu-head-copy">
+                <h1>Payment</h1>
+              </div>
+            </div>
+          </section>
+
+          <section class="cart-shell payment-shell">
+            <article class="bill-card">
+              <h3>Order Summary</h3>
+              @for (line of cartItems(); track line.itemId) {
+                <div class="bill-row"><span>{{ line.item.name }} x {{ line.quantity }}</span><span>{{ lineTotal(line.itemId) | currency:'INR':'symbol':'1.0-0' }}</span></div>
+              }
+              <div class="bill-row total-divider"><span>Subtotal</span><span>{{ cartTotal() | currency:'INR':'symbol':'1.0-0' }}</span></div>
+              <div class="bill-row"><span>GST (18%)</span><span>{{ gstAmount() | currency:'INR':'symbol':'1.0-0' }}</span></div>
+              <div class="bill-row total"><span>Total</span><strong>{{ payableTotal() | currency:'INR':'symbol':'1.0-0' }}</strong></div>
+            </article>
+
+            <article class="bill-card">
+              <h3>Payment Method</h3>
+              <button type="button" class="method-card active">
+                <div class="method-icon"><i class="pi pi-wallet"></i></div>
+                <div class="method-copy">
+                  <strong>Pay on Delivery</strong>
+                  <span>Cash payment at room delivery</span>
+                </div>
+                <i class="pi pi-check-circle"></i>
+              </button>
+            </article>
+
+            <div class="note-box">
+              Order will be confirmed instantly. Pay by cash when your food is delivered.
+            </div>
+          </section>
+
+          <section class="cart-footer">
+            <div class="cart-footer-row">
+              <span>{{ cartItemCount() }} items</span>
+              <strong>Total: {{ payableTotal() | currency:'INR':'symbol':'1.0-0' }}</strong>
+            </div>
+            <button type="button" class="cart-cta" (click)="placeOrder()">Confirm Order</button>
+          </section>
+        }
+      }
+
+      @if (checkoutMessage()) {
+        <div class="feedback-msg">
+          <p-message [severity]="checkoutSuccess() ? 'success' : 'error'" variant="simple">{{ checkoutMessage() }}</p-message>
+        </div>
+      }
     }
-  } @else {
-    <p-card>
-      <ng-template pTemplate="title">Invalid QR Route</ng-template>
-      <p>This hotel code is not mapped. Try /guest/blr-gp-01</p>
-    </p-card>
   }
 </div>
-

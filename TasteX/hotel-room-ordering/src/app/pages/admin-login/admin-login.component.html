@@ -1,0 +1,45 @@
+﻿<div class="admin-login-page">
+  <section class="login-wrap">
+    <div class="logo-badge"><i class="pi pi-shield"></i></div>
+    <h1>Super Admin</h1>
+    <p>Central Control Panel</p>
+
+    <form class="login-card" (ngSubmit)="signIn()">
+      <label for="username">Username</label>
+      <div class="field">
+        <i class="pi pi-user"></i>
+        <input
+          id="username"
+          name="username"
+          type="text"
+          [ngModel]="username()"
+          (ngModelChange)="username.set($event); error.set('')"
+          autocomplete="username"
+        />
+      </div>
+
+      <label for="password">Password</label>
+      <div class="field">
+        <i class="pi pi-lock"></i>
+        <input
+          id="password"
+          name="password"
+          [type]="showPassword() ? 'text' : 'password'"
+          [ngModel]="password()"
+          (ngModelChange)="password.set($event); error.set('')"
+          autocomplete="current-password"
+        />
+        <button type="button" class="eye" (click)="togglePassword()" aria-label="Toggle password">
+          <i class="pi" [class.pi-eye]="!showPassword()" [class.pi-eye-slash]="showPassword()"></i>
+        </button>
+      </div>
+
+      <small class="demo-note">Demo: admin / admin123</small>
+      @if (error()) {
+        <small class="error">{{ error() }}</small>
+      }
+
+      <button type="submit" class="sign-in-btn">Sign In</button>
+    </form>
+  </section>
+</div>

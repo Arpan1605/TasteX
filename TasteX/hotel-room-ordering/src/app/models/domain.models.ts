@@ -1,7 +1,7 @@
-export type FoodPreference = 'All' | 'Veg' | 'NonVeg';
+﻿export type FoodPreference = 'All' | 'Veg' | 'NonVeg';
 export type PaymentStatus = 'Pending' | 'Paid' | 'Failed';
 export type PaymentMethod = 'COD';
-export type OrderStatus = 'Accepted' | 'Preparing' | 'Ready' | 'Delivered';
+export type OrderStatus = 'Accepted' | 'Preparing' | 'Ready' | 'Delivered' | 'Rejected';
 
 export interface City {
   id: number;
@@ -62,11 +62,18 @@ export interface Order {
   hotelId: number;
   kitchenId: number;
   mobile: string;
+  roomNumber?: string;
   lines: OrderLine[];
   totalAmount: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   status: OrderStatus;
+  acceptedAt?: string;
+  preparingStartedAt?: string;
+  readyAt?: string;
+  deliveredAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -82,3 +89,7 @@ export interface MenuCategory {
   category: Category;
   items: Item[];
 }
+
+
+
+
