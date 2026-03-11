@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { API_BASE_URL } from '../config/api-base-url';
 
 interface ApiError {
   code?: string;
@@ -93,7 +94,7 @@ export interface CheckoutResponse {
 @Injectable({ providedIn: 'root' })
 export class GuestApiService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api/v1/guest';
+  private readonly baseUrl = `${API_BASE_URL}/api/v1/guest`;
 
   getHotelMenu(hotelCode: string): Observable<ApiResponse<HotelMenuResponseDto>> {
     return this.http.get<ApiResponse<HotelMenuResponseDto>>(`${this.baseUrl}/hotels/${encodeURIComponent(hotelCode)}/menu`);
@@ -111,3 +112,5 @@ export class GuestApiService {
     return this.http.post<ApiResponse<CheckoutResponse>>(`${this.baseUrl}/checkout`, request);
   }
 }
+
+

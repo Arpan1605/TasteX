@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { API_BASE_URL } from '../config/api-base-url';
 
 export interface AdminKitchenDto {
   kitchenId: number;
@@ -146,7 +147,7 @@ interface ApiResponse<T> {
 @Injectable({ providedIn: 'root' })
 export class AdminApiService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api/v1/admin';
+  private readonly baseUrl = `${API_BASE_URL}/api/v1/admin`;
 
   getCities(): Observable<ApiResponse<AdminCityDto[]>> {
     return this.http.get<ApiResponse<AdminCityDto[]>>(`${this.baseUrl}/cities`);
@@ -232,3 +233,4 @@ export class AdminApiService {
     return this.http.delete<ApiResponse<boolean>>(`${this.baseUrl}/hotels/${hotelId}/menu/items/${itemId}`);
   }
 }
+

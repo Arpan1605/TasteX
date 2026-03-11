@@ -143,3 +143,4 @@ A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api\obj\Debug\net
 A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api\obj\Debug\net8.0\HotelRoomOrdering.Api.pdb
 A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api\obj\Debug\net8.0\HotelRoomOrdering.Api.genruntimeconfig.cache
 A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api\obj\Debug\net8.0\ref\HotelRoomOrdering.Api.dll
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api\obj\Debug\net8.0\HotelRoomOrdering.Api.sourcelink.json

@@ -9,3 +9,4 @@ A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj
 A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\refint\HotelRoomOrdering.Api.Contracts.dll
 A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\HotelRoomOrdering.Api.Contracts.pdb
 A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\ref\HotelRoomOrdering.Api.Contracts.dll
+A:\TasteX\TasteX\hotel-room-ordering\backend\HotelRoomOrdering.Api.Contracts\obj\Debug\net8.0\HotelRoomOrdering.Api.Contracts.sourcelink.json
