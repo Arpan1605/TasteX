@@ -1,4 +1,4 @@
-﻿.admin-layout {
+.admin-layout {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 280px 1fr;
@@ -1636,4 +1636,18 @@ th {
   gap: 8px;
   justify-content: flex-end;
 }
+
+
+.category-icon-emoji {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.category-icon-img {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
 

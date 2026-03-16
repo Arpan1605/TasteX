@@ -28,6 +28,8 @@ public sealed record KitchenOrderDto(
     string HotelName,
     string HotelCode,
     string MaskedMobileNumber,
+    string MobileNumber,
+    string? RoomNumber,
     PaymentMethod PaymentMethod,
     PaymentStatus PaymentStatus,
     OrderStatus OrderStatus,
@@ -64,3 +66,4 @@ public sealed record UpdateOrderStatusResponse(
     OrderStatus PreviousStatus,
     OrderStatus CurrentStatus,
     DateTimeOffset UpdatedAtUtc);
+

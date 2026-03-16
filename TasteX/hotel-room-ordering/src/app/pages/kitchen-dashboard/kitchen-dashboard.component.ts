@@ -1,18 +1,68 @@
-import { CommonModule } from '@angular/common';
+ï»¿import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { firstValueFrom } from 'rxjs';
-import { ITEMS } from '../../data/dummy-data';
-import { MockStoreService } from '../../services/mock-store.service';
-import { KitchenApiService } from '../../services/kitchen-api.service';
 import { OrderStatus } from '../../models/domain.models';
+import { AdminApiService, AdminHotelDto, AdminMenuCategoryDto } from '../../services/admin-api.service';
+import {
+  KitchenApiService,
+  KitchenOrderDto,
+  KitchenOrdersResponse,
+  UpdateOrderStatusRequest
+} from '../../services/kitchen-api.service';
 
 type QueueFilter = 'Active Orders' | 'New' | OrderStatus;
-type DashboardRow = ReturnType<MockStoreService['getDashboardOrders']>[number];
 type ToastItem = { id: number; message: string };
-type MenuInventoryItem = { hotelId: number; itemId: number; name: string; isVeg: boolean; isActive: boolean; baseInventory: number; availableKitchenIds: number[] };
+type MenuInventoryItem = {
+  hotelId: number;
+  itemId: number;
+  name: string;
+  isVeg: boolean;
+  isActive: boolean;
+  baseInventory: number;
+  availableKitchenIds: number[];
+};
+
+type DashboardLine = {
+  itemId: number;
+  itemName: string;
+  isVeg: boolean;
+  quantity: number;
+  unitPrice: number;
+};
+
+type DashboardRow = {
+  id: number;
+  orderNo: string;
+  hotelId: number;
+  hotelName: string;
+  kitchenId: number;
+  mobile: string;
+  roomNumber?: string;
+  lines: DashboardLine[];
+  totalAmount: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  status: OrderStatus;
+  createdAt: string;
+  updatedAt: string;
+  acceptedAt?: string;
+  preparingStartedAt?: string;
+  readyAt?: string;
+  deliveredAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+};
+
+type KitchenSessionState = {
+  kitchenId: number;
+  kitchenName: string;
+  cityName: string;
+  loginUsername: string;
+};
 
 @Component({
   selector: 'app-kitchen-dashboard',
@@ -21,22 +71,27 @@ type MenuInventoryItem = { hotelId: number; itemId: number; name: string; isVeg:
   styleUrl: './kitchen-dashboard.component.scss'
 })
 export class KitchenDashboardComponent implements OnDestroy {
-  private readonly store = inject(MockStoreService);
+  private readonly adminApi = inject(AdminApiService);
   private readonly kitchenApi = inject(KitchenApiService);
   private readonly knownOrderIds = new Set<number>();
   private readonly pulseTimers = new Set<ReturnType<typeof setTimeout>>();
-  private readonly itemById = new Map(ITEMS.map((item) => [item.id, item] as const));
   private readonly menuStorageKey = 'tx_admin_menu_v1';
   private readonly hotelMenuStorageKey = 'tx_admin_hotel_menus_v1';
-    private readonly kitchenSessionKey = 'tx_kitchen_session_v1';
+  private readonly kitchenSessionKey = 'tx_kitchen_session_v1';
+  private readonly printedKotStorageKey = 'tx_kitchen_printed_kot_v1';
   private readonly nowTick = signal(Date.now());
   private readonly menuItems = signal<MenuInventoryItem[]>(this.loadMenuItems());
+  private readonly allHotels = signal<AdminHotelDto[]>([]);
+  private readonly backendOrders = signal<DashboardRow[]>([]);
+  private readonly hotelMenusByHotelId = signal<Record<number, AdminMenuCategoryDto[]>>({});
+  private readonly printedKotByOrderId = signal<Record<number, string>>(this.loadPrintedKotMap());
   private readonly refreshTimer: ReturnType<typeof setInterval> | null;
+  private readonly activeSession = signal<KitchenSessionState | null>(this.loadKitchenSession());
   private toastId = 0;
   private initialized = false;
 
-  selectedKitchenId = signal<number | null>(this.loadKitchenSession());
-  kitchenLoginUsername = signal('');
+  selectedKitchenId = signal<number | null>(this.activeSession()?.kitchenId ?? null);
+  kitchenLoginUsername = signal(this.activeSession()?.loginUsername ?? '');
   kitchenLoginPassword = signal('');
   selectedHotelId = signal<number | null>(null);
   selectedQueue = signal<QueueFilter>('Active Orders');
@@ -50,23 +105,20 @@ export class KitchenDashboardComponent implements OnDestroy {
   rejectionReasonError = signal('');
   actionMessage = signal('');
   loginError = signal('');
+  autoPrintKot = signal(true);
+  showBillingPanel = signal(true);
+  showInventoryPanel = signal(true);
 
-  readonly hotels = this.store.hotels;
-  readonly kitchens = this.store.kitchens;
   readonly queueOptions: QueueFilter[] = ['Active Orders', 'New', 'Accepted', 'Preparing', 'Ready', 'Delivered', 'Rejected'];
 
   readonly kitchenHotels = computed(() => {
     const kitchenId = this.selectedKitchenId();
-    return kitchenId ? this.store.hotels.filter((hotel) => hotel.kitchenId === kitchenId) : [];
+    return kitchenId ? this.allHotels().filter((hotel) => hotel.kitchenId === kitchenId) : [];
   });
 
   readonly scopedRows = computed(() => {
     const kitchenId = this.selectedKitchenId();
-    if (!kitchenId) {
-      return [] as DashboardRow[];
-    }
-
-    return this.store.getDashboardOrders().filter((row) => row.kitchenId === kitchenId);
+    return kitchenId ? this.backendOrders().filter((row) => row.kitchenId === kitchenId) : [];
   });
 
   readonly rows = computed(() => {
@@ -82,11 +134,11 @@ export class KitchenDashboardComponent implements OnDestroy {
       return [] as Array<{ itemId: number; name: string; isVeg: boolean; baseInventory: number; available: number }>;
     }
 
-    const kitchenHotelIds = this.kitchenHotels().map((hotel) => hotel.id);
+    const kitchenHotelIds = this.kitchenHotels().map((hotel) => hotel.hotelId);
     const targetHotelIds = this.selectedHotelId() ? [this.selectedHotelId() as number] : kitchenHotelIds;
     const reservedByKey = new Map<string, number>();
 
-    this.store.getDashboardOrders()
+    this.rows()
       .filter((row) => targetHotelIds.includes(row.hotelId) && row.status !== 'Rejected')
       .forEach((row) => {
         row.lines.forEach((line) => {
@@ -96,16 +148,52 @@ export class KitchenDashboardComponent implements OnDestroy {
       });
 
     const aggregate = new Map<number, { itemId: number; name: string; isVeg: boolean; baseInventory: number; available: number }>();
+    const apiMenus = this.hotelMenusByHotelId();
+    const hasApiMenus = Object.keys(apiMenus).length > 0;
 
-    this.menuItems()
-      .filter((item) => targetHotelIds.includes(item.hotelId) && item.isActive && item.availableKitchenIds.includes(kitchenId))
-      .forEach((item) => {
-        const reserved = reservedByKey.get(`${item.hotelId}:${item.itemId}`) ?? 0;
-        const current = aggregate.get(item.itemId) ?? { itemId: item.itemId, name: item.name, isVeg: item.isVeg, baseInventory: 0, available: 0 };
-        current.baseInventory += item.baseInventory;
-        current.available += Math.max(0, item.baseInventory - reserved);
-        aggregate.set(item.itemId, current);
+    if (hasApiMenus) {
+      targetHotelIds.forEach((hotelId) => {
+        const categories = apiMenus[hotelId] ?? [];
+        categories.forEach((category) => {
+          category.items.forEach((item) => {
+            if (!item.isActive || !item.availableKitchenIds.includes(kitchenId)) {
+              return;
+            }
+
+            const baseInventory = Math.max(0, Number(item.inventoryQuantity ?? 0));
+            const reserved = reservedByKey.get(`${hotelId}:${item.itemId}`) ?? 0;
+            const current = aggregate.get(item.itemId) ?? {
+              itemId: item.itemId,
+              name: item.name,
+              isVeg: item.isVeg,
+              baseInventory: 0,
+              available: 0
+            };
+
+            current.baseInventory += baseInventory;
+            current.available += Math.max(0, baseInventory - reserved);
+            aggregate.set(item.itemId, current);
+          });
+        });
       });
+    } else {
+      this.menuItems()
+        .filter((item) => targetHotelIds.includes(item.hotelId) && item.isActive && item.availableKitchenIds.includes(kitchenId))
+        .forEach((item) => {
+          const reserved = reservedByKey.get(`${item.hotelId}:${item.itemId}`) ?? 0;
+          const current = aggregate.get(item.itemId) ?? {
+            itemId: item.itemId,
+            name: item.name,
+            isVeg: item.isVeg,
+            baseInventory: 0,
+            available: 0
+          };
+
+          current.baseInventory += item.baseInventory;
+          current.available += Math.max(0, item.baseInventory - reserved);
+          aggregate.set(item.itemId, current);
+        });
+    }
 
     return Array.from(aggregate.values()).sort((a, b) => a.name.localeCompare(b.name));
   });
@@ -126,12 +214,8 @@ export class KitchenDashboardComponent implements OnDestroy {
   readonly chipNewCount = computed(() => this.unreadNew() || this.stats().newCount);
 
   readonly kitchenTitle = computed(() => {
-    const kitchenId = this.selectedKitchenId();
-    if (!kitchenId) {
-      return 'Kitchen Dashboard';
-    }
-
-    return this.store.kitchens.find((entry) => entry.id === kitchenId)?.name ?? 'Kitchen Dashboard';
+    const session = this.activeSession();
+    return session?.kitchenName?.trim() || 'Kitchen Dashboard';
   });
 
   readonly kitchenSubtitle = computed(() => {
@@ -140,10 +224,12 @@ export class KitchenDashboardComponent implements OnDestroy {
       return 'Select a kitchen to continue';
     }
 
-    const kitchen = this.store.kitchens.find((entry) => entry.id === kitchenId);
-    const cityName = this.store.cities.find((entry) => entry.id === kitchen?.cityId)?.name ?? 'Unknown City';
+    const session = this.activeSession();
+    const fallbackCity = this.kitchenHotels()[0]?.cityName?.trim();
+    const cityName = session?.cityName?.trim() || fallbackCity || 'Unknown City';
     const hotelCount = this.kitchenHotels().length;
-    return `${cityName} ï¿½ ${hotelCount} hotel${hotelCount === 1 ? '' : 's'} mapped`;
+
+    return cityName + ' - ' + hotelCount + ' hotel' + (hotelCount === 1 ? '' : 's') + ' mapped';
   });
 
   readonly filteredRows = computed(() => {
@@ -162,19 +248,20 @@ export class KitchenDashboardComponent implements OnDestroy {
     return source.filter((row) => row.status === queue);
   });
 
+  readonly kotQueueRows = computed(() => this.rows().filter((row) => row.status !== 'Delivered' && row.status !== 'Rejected'));
+
   constructor() {
     this.refreshTimer = typeof window !== 'undefined'
-      ? setInterval(() => this.nowTick.set(Date.now()), 30000)
+      ? setInterval(() => {
+          this.nowTick.set(Date.now());
+          void this.refreshDashboardData();
+        }, 30000)
       : null;
 
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', (event: StorageEvent) => {
         if (event.key === this.menuStorageKey || event.key === this.hotelMenuStorageKey) {
           this.menuItems.set(this.loadMenuItems());
-          return;
-        }
-        if (event.key === this.kitchenSessionKey) {
-          this.selectedKitchenId.set(this.loadKitchenSession());
         }
       });
     }
@@ -183,19 +270,21 @@ export class KitchenDashboardComponent implements OnDestroy {
       const hotels = this.kitchenHotels();
       const selectedHotelId = this.selectedHotelId();
 
-      if (selectedHotelId && !hotels.some((hotel) => hotel.id === selectedHotelId)) {
+      if (selectedHotelId && !hotels.some((hotel) => hotel.hotelId === selectedHotelId)) {
         this.selectedHotelId.set(null);
       }
     });
 
     effect(() => {
       const kitchenId = this.selectedKitchenId();
+      const session = this.activeSession();
+
       if (typeof window === 'undefined') {
         return;
       }
 
-      if (kitchenId) {
-        localStorage.setItem(this.kitchenSessionKey, String(kitchenId));
+      if (kitchenId && session) {
+        localStorage.setItem(this.kitchenSessionKey, JSON.stringify(session));
       } else {
         localStorage.removeItem(this.kitchenSessionKey);
       }
@@ -240,13 +329,19 @@ export class KitchenDashboardComponent implements OnDestroy {
       this.pulseTimers.add(pulseTimer);
 
       incoming.forEach((row) => this.pushToast(row));
+      incoming.forEach((row) => this.tryAutoPrintKot(row));
       this.playNotificationSound();
     });
+
+    if (this.selectedKitchenId()) {
+      void this.refreshDashboardData();
+    }
   }
 
   ngOnDestroy(): void {
     this.pulseTimers.forEach((timer) => clearTimeout(timer));
     this.pulseTimers.clear();
+
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
     }
@@ -268,26 +363,40 @@ export class KitchenDashboardComponent implements OnDestroy {
         return;
       }
 
+      this.activeSession.set({
+        kitchenId: response.data.kitchenId,
+        kitchenName: response.data.kitchenName,
+        cityName: response.data.cityName,
+        loginUsername: response.data.loginUsername
+      });
+
       this.selectedKitchenId.set(response.data.kitchenId);
       this.selectedHotelId.set(null);
       this.selectedQueue.set('Active Orders');
+      this.kitchenLoginUsername.set(response.data.loginUsername || username);
+      this.kitchenLoginPassword.set('');
       this.loginError.set('');
       this.notificationToasts.set([]);
       this.unreadNew.set(0);
       this.highlightNew.set(false);
       this.knownOrderIds.clear();
       this.initialized = false;
+
+      await this.refreshDashboardData();
     } catch {
       this.loginError.set('Kitchen login service is unavailable. Check the backend API and try again.');
     }
   }
 
   logoutKitchen(): void {
+    this.activeSession.set(null);
     this.selectedKitchenId.set(null);
     this.kitchenLoginUsername.set('');
     this.kitchenLoginPassword.set('');
     this.selectedHotelId.set(null);
     this.selectedQueue.set('Active Orders');
+    this.backendOrders.set([]);
+    this.allHotels.set([]);
     this.notificationToasts.set([]);
     this.unreadNew.set(0);
     this.highlightNew.set(false);
@@ -298,13 +407,24 @@ export class KitchenDashboardComponent implements OnDestroy {
   setHotelFilter(value: string): void {
     if (!value) {
       this.selectedHotelId.set(null);
-      return;
+    } else {
+      this.selectedHotelId.set(Number(value));
     }
-    this.selectedHotelId.set(Number(value));
+
+    void this.loadOrdersFromApi();
+    void this.loadHotelMenusFromApi();
   }
 
   setQueue(value: QueueFilter): void {
     this.selectedQueue.set(value);
+  }
+
+  toggleBillingPanel(): void {
+    this.showBillingPanel.update((open) => !open);
+  }
+
+  toggleInventoryPanel(): void {
+    this.showInventoryPanel.update((open) => !open);
   }
 
   openNewNotifications(): void {
@@ -331,21 +451,35 @@ export class KitchenDashboardComponent implements OnDestroy {
   }
 
   acceptOrder(orderId: number): void {
-    this.store.updateOrderStatus(orderId, 'Accepted');
+    void this.updateOrderStatus(orderId, 'Accepted').then((updated) => {
+      if (!updated) return;
+      this.selectedQueue.set('Accepted');
+      this.expandedOrderId.set(orderId);
+    });
   }
 
   startPreparing(orderId: number): void {
-    this.store.updateOrderStatus(orderId, 'Preparing');
+    void this.updateOrderStatus(orderId, 'Preparing').then((updated) => {
+      if (!updated) return;
+      this.selectedQueue.set('Preparing');
+      this.expandedOrderId.set(orderId);
+    });
   }
 
   markReady(orderId: number): void {
-    this.store.updateOrderStatus(orderId, 'Ready');
+    void this.updateOrderStatus(orderId, 'Ready').then((updated) => {
+      if (!updated) return;
+      this.selectedQueue.set('Ready');
+      this.expandedOrderId.set(orderId);
+    });
   }
 
   markDelivered(orderId: number): void {
-    this.store.updateOrderStatus(orderId, 'Delivered');
-    this.selectedQueue.set('Delivered');
-    this.expandedOrderId.set(orderId);
+    void this.updateOrderStatus(orderId, 'Delivered').then((updated) => {
+      if (!updated) return;
+      this.selectedQueue.set('Delivered');
+      this.expandedOrderId.set(orderId);
+    });
   }
 
   openRejectDialog(orderId: number): void {
@@ -373,15 +507,14 @@ export class KitchenDashboardComponent implements OnDestroy {
       return;
     }
 
-    const result = this.store.rejectOrder(orderId, reason);
-    if (result.success) {
-      this.actionMessage.set(result.message);
+    void this.updateOrderStatus(orderId, 'Rejected', reason).then((updated) => {
+      if (!updated) return;
+      this.actionMessage.set('Order rejected successfully.');
       this.expandedOrderId.set(null);
       const clearTimer = setTimeout(() => this.actionMessage.set(''), 5000);
       this.pulseTimers.add(clearTimer);
-    }
-
-    this.closeRejectDialog();
+      this.closeRejectDialog();
+    });
   }
 
   showAcceptedState(row: { status: OrderStatus; createdAt: string; updatedAt: string }): boolean {
@@ -402,17 +535,26 @@ export class KitchenDashboardComponent implements OnDestroy {
   }
 
   itemName(itemId: number): string {
-    return this.itemById.get(itemId)?.name ?? `Item #${itemId}`;
+    const found = this.backendOrders()
+      .flatMap((order) => order.lines)
+      .find((line) => line.itemId === itemId)?.itemName;
+
+    return found ?? `Item #${itemId}`;
   }
 
   itemIsVeg(itemId: number): boolean {
-    return this.itemById.get(itemId)?.isVeg ?? true;
+    const found = this.backendOrders()
+      .flatMap((order) => order.lines)
+      .find((line) => line.itemId === itemId)?.isVeg;
+
+    return found ?? true;
   }
 
   placedTime(iso?: string): string {
     if (!iso) {
       return '-';
     }
+
     return new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
       .format(new Date(iso))
       .toLowerCase();
@@ -486,27 +628,461 @@ export class KitchenDashboardComponent implements OnDestroy {
     if (m === 0) {
       return `${h}h ago`;
     }
+
     return `${h}h ${m}m ago`;
   }
 
+  isKotPrinted(orderId: number): boolean {
+    return !!this.printedKotByOrderId()[orderId];
+  }
+
+  kotPrintedTime(orderId: number): string {
+    const value = this.printedKotByOrderId()[orderId];
+    if (!value) {
+      return '-';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+
+    return new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  }
+
+  printKot(orderId: number): void {
+    const row = this.scopedRows().find((entry) => entry.id === orderId);
+    if (!row) {
+      this.actionMessage.set('Order not found for KOT printing.');
+      return;
+    }
+
+    this.printKotForRow(row, false);
+  }
+
+  reprintKot(orderId: number): void {
+    this.printKot(orderId);
+  }
   private statusOf(row: { status: string }): string {
     return (row.status || '').trim().toLowerCase();
   }
 
+  private tryAutoPrintKot(row: DashboardRow): void {
+    if (!this.autoPrintKot() || this.isKotPrinted(row.id)) {
+      return;
+    }
+
+    this.printKotForRow(row, true);
+  }
   private pushToast(row: DashboardRow): void {
-    const room = row.roomNumber ? ' • Room ' + row.roomNumber : '';
+    const room = row.roomNumber ? ' - Room ' + row.roomNumber : '';
     const id = ++this.toastId;
-    this.notificationToasts.update((items) => [{ id, message: row.orderNo + ' • ' + row.hotelName + room }, ...items].slice(0, 8));
+    this.notificationToasts.update((items) => [{ id, message: row.orderNo + ' - ' + row.hotelName + room }, ...items].slice(0, 8));
   }
 
-  private loadKitchenSession(): number | null {
+  private printKotForRow(row: DashboardRow, automatic: boolean): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const popup = window.open('', '_kot_' + row.id, 'width=420,height=680');
+    if (!popup) {
+      if (!automatic) {
+        this.actionMessage.set('Popup blocked. Allow popups to print KOT.');
+      }
+      return;
+    }
+
+    popup.document.open();
+    popup.document.write(this.buildKotHtml(row));
+    popup.document.close();
+
+    const printedAt = new Date().toISOString();
+    this.markKotPrinted(row.id, printedAt);
+
+    if (!automatic) {
+      this.actionMessage.set('KOT sent to printer.');
+      const clearTimer = setTimeout(() => this.actionMessage.set(''), 3000);
+      this.pulseTimers.add(clearTimer);
+    }
+  }
+
+  private buildKotHtml(row: DashboardRow): string {
+    const linesHtml = row.lines.map((line, index) =>
+      '<tr><td>' + (index + 1) + '</td><td>' + this.escapeHtml(line.itemName) + '</td><td style="text-align:right;">' + line.quantity + '</td></tr>').join('');
+
+    const createdAt = this.escapeHtml(this.placedTime(row.createdAt).toUpperCase());
+    const hotel = this.escapeHtml(row.hotelName);
+    const room = this.escapeHtml(row.roomNumber || '-');
+    const mobile = this.escapeHtml(row.mobile || '-');
+    const orderNo = this.escapeHtml(row.orderNo);
+
+    return '<!doctype html><html><head><meta charset="utf-8" /><title>KOT ' + orderNo + '</title><style>' +
+      'body{font-family:Arial,sans-serif;margin:0;padding:12px;color:#111;} .head{text-align:center;border-bottom:1px dashed #555;padding-bottom:8px;margin-bottom:8px;} .head h2{margin:0 0 4px;font-size:18px;} .meta{font-size:12px;line-height:1.5;margin-bottom:8px;} table{width:100%;border-collapse:collapse;font-size:13px;} th,td{border-bottom:1px dashed #bbb;padding:6px 2px;} th{text-align:left;font-size:12px;} .foot{margin-top:10px;border-top:1px dashed #555;padding-top:8px;font-size:12px;text-align:center;}' +
+      '</style></head><body><div class="head"><h2>KITCHEN ORDER TICKET</h2><div>' + hotel + '</div></div><div class="meta"><div><strong>Order:</strong> ' + orderNo + '</div><div><strong>Room:</strong> ' + room + '</div><div><strong>Mobile:</strong> ' + mobile + '</div><div><strong>Placed:</strong> ' + createdAt + '</div></div><table><thead><tr><th>#</th><th>Item</th><th style="text-align:right;">Qty</th></tr></thead><tbody>' + linesHtml + '</tbody></table><div class="foot">Chef copy</div><script>window.onload=function(){setTimeout(function(){window.print();setTimeout(function(){window.close();},250);},100);};</script></body></html>';
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  private markKotPrinted(orderId: number, printedAtIso: string): void {
+    const next = { ...this.printedKotByOrderId(), [orderId]: printedAtIso };
+    this.printedKotByOrderId.set(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(this.printedKotStorageKey, JSON.stringify(next));
+    }
+  }
+  private async refreshDashboardData(): Promise<void> {
+    await this.loadHotelsFromApi();
+    await Promise.all([this.loadOrdersFromApi(), this.loadHotelMenusFromApi()]);
+
+  }
+  private async loadHotelsFromApi(): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.adminApi.getHotels());
+      if (!response.success || !Array.isArray(response.data)) {
+        return;
+      }
+
+      this.allHotels.set(response.data);
+
+      const currentCity = this.activeSession()?.cityName?.trim();
+      if (currentCity && currentCity.toLowerCase() !== 'unknown city') {
+        return;
+      }
+
+      const kitchenId = this.selectedKitchenId();
+      if (!kitchenId) {
+        return;
+      }
+
+      const firstHotel = response.data.find((hotel) => hotel.kitchenId === kitchenId);
+      if (!firstHotel) {
+        return;
+      }
+
+      const session = this.activeSession();
+      if (!session) {
+        return;
+      }
+
+      this.activeSession.set({ ...session, cityName: firstHotel.cityName || session.cityName });
+    } catch {
+      this.allHotels.set([]);
+    }
+  }
+
+  private async loadOrdersFromApi(): Promise<void> {
+    const kitchenId = this.selectedKitchenId();
+    if (!kitchenId) {
+      this.backendOrders.set([]);
+      return;
+    }
+
+    try {
+      const response = await firstValueFrom(this.kitchenApi.getOrders({
+        kitchenId,
+        hotelId: this.selectedHotelId() ?? undefined,
+        pageNumber: 1,
+        pageSize: 200
+      }));
+
+      if (!response.success || !response.data) {
+        this.backendOrders.set([]);
+        return;
+      }
+
+      this.backendOrders.set(this.mapOrdersResponse(response.data, kitchenId));
+    } catch {
+      this.backendOrders.set([]);
+    }
+  }
+
+
+  private async loadHotelMenusFromApi(): Promise<void> {
+    const kitchenId = this.selectedKitchenId();
+    if (!kitchenId) {
+      this.hotelMenusByHotelId.set({});
+      return;
+    }
+
+    const kitchenHotelIds = this.kitchenHotels().map((hotel) => hotel.hotelId);
+    const targetHotelIds = this.selectedHotelId() ? [this.selectedHotelId() as number] : kitchenHotelIds;
+    if (targetHotelIds.length === 0) {
+      this.hotelMenusByHotelId.set({});
+      return;
+    }
+
+    const next: Record<number, AdminMenuCategoryDto[]> = {};
+    await Promise.all(
+      targetHotelIds.map(async (hotelId) => {
+        try {
+          const response = await firstValueFrom(this.adminApi.getHotelMenu(hotelId));
+          next[hotelId] = response.success && Array.isArray(response.data) ? response.data : [];
+        } catch {
+          next[hotelId] = [];
+        }
+      })
+    );
+
+    this.hotelMenusByHotelId.set(next);
+  }
+  private mapOrdersResponse(payload: KitchenOrdersResponse, kitchenId: number): DashboardRow[] {
+    if (!Array.isArray(payload.orders)) {
+      return [];
+    }
+
+    return payload.orders.map((order) => this.mapOrderDto(order, kitchenId));
+  }
+
+  private mapOrderDto(dto: KitchenOrderDto, kitchenId: number): DashboardRow {
+    const status = this.mapOrderStatus(dto.orderStatus);
+    const createdAt = dto.createdAtUtc;
+    const updatedAt = dto.updatedAtUtc;
+
+    return {
+      id: dto.orderId,
+      orderNo: dto.orderNumber,
+      hotelId: dto.hotelId,
+      hotelName: dto.hotelName,
+      kitchenId,
+      mobile: this.normalizeMobileNumber(dto.mobileNumber, dto.maskedMobileNumber),
+      roomNumber: this.normalizeRoomNumber(dto.roomNumber),
+      lines: Array.isArray(dto.lines)
+        ? dto.lines.map((line) => ({
+            itemId: line.itemId,
+            itemName: line.itemName,
+            isVeg: !!line.isVeg,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice
+          }))
+        : [],
+      totalAmount: dto.totalAmount,
+      paymentMethod: this.mapPaymentMethod(dto.paymentMethod),
+      paymentStatus: this.mapPaymentStatus(dto.paymentStatus),
+      status,
+      createdAt,
+      updatedAt,
+      acceptedAt: status === 'Accepted' || status === 'Preparing' || status === 'Ready' || status === 'Delivered' ? updatedAt : undefined,
+      preparingStartedAt: status === 'Preparing' || status === 'Ready' || status === 'Delivered' ? updatedAt : undefined,
+      readyAt: status === 'Ready' || status === 'Delivered' ? updatedAt : undefined,
+      deliveredAt: status === 'Delivered' ? updatedAt : undefined,
+      rejectedAt: status === 'Rejected' ? updatedAt : undefined
+    };
+  }
+
+  private mapOrderStatus(status: number | string): OrderStatus {
+    if (typeof status === 'string') {
+      const normalized = status.trim().toLowerCase();
+      if (normalized === 'accepted') return 'Accepted';
+      if (normalized === 'preparing') return 'Preparing';
+      if (normalized === 'ready') return 'Ready';
+      if (normalized === 'delivered') return 'Delivered';
+      if (normalized === 'cancelled' || normalized === 'rejected') return 'Rejected';
+      return 'Accepted';
+    }
+
+    switch (status) {
+      case 1: return 'Accepted';
+      case 2: return 'Preparing';
+      case 3: return 'Ready';
+      case 4: return 'Delivered';
+      case 5: return 'Rejected';
+      default: return 'Accepted';
+    }
+  }
+
+  private mapPaymentMethod(method: number | string): string {
+    if (typeof method === 'string') {
+      return method;
+    }
+    return method === 1 ? 'COD' : String(method);
+  }
+
+  private mapPaymentStatus(status: number | string): string {
+    if (typeof status === 'string') {
+      return status;
+    }
+
+    switch (status) {
+      case 1: return 'Pending';
+      case 2: return 'Paid';
+      case 3: return 'Failed';
+      case 4: return 'Refunded';
+      default: return String(status);
+    }
+  }
+
+  private toApiOrderStatus(status: OrderStatus): number {
+    if (status === 'Accepted') return 1;
+    if (status === 'Preparing') return 2;
+    if (status === 'Ready') return 3;
+    if (status === 'Delivered') return 4;
+    return 5;
+  }
+
+  private async updateOrderStatus(orderId: number, status: OrderStatus, notes?: string): Promise<boolean> {
+    const kitchenId = this.selectedKitchenId();
+    if (!kitchenId) {
+      this.actionMessage.set('Select a kitchen first.');
+      return false;
+    }
+
+    const stringRequest: UpdateOrderStatusRequest = {
+      orderId,
+      newStatus: status,
+      updatedBy: this.activeSession()?.loginUsername || this.kitchenTitle(),
+      notes
+    };
+
+    const numericRequest: UpdateOrderStatusRequest = {
+      orderId,
+      newStatus: this.toApiOrderStatus(status),
+      updatedBy: this.activeSession()?.loginUsername || this.kitchenTitle(),
+      notes
+    };
+
+    const applySuccess = async (): Promise<boolean> => {
+      this.actionMessage.set('Order status updated.');
+      const clearTimer = setTimeout(() => this.actionMessage.set(''), 3000);
+      this.pulseTimers.add(clearTimer);
+      await this.loadOrdersFromApi();
+      return true;
+    };
+
+    try {
+      const response = await firstValueFrom(this.kitchenApi.updateOrderStatus(orderId, stringRequest));
+      if (response.success) {
+        return await applySuccess();
+      }
+
+      const fallback = await firstValueFrom(this.kitchenApi.updateOrderStatus(orderId, numericRequest));
+      if (fallback.success) {
+        return await applySuccess();
+      }
+
+      const apiError = fallback.errors && fallback.errors.length > 0 ? fallback.errors[0] : null;
+      this.actionMessage.set(apiError || fallback.message || 'Unable to update order status right now.');
+      const clearTimer = setTimeout(() => this.actionMessage.set(''), 4000);
+      this.pulseTimers.add(clearTimer);
+      return false;
+    } catch (error) {
+      try {
+        const fallback = await firstValueFrom(this.kitchenApi.updateOrderStatus(orderId, numericRequest));
+        if (fallback.success) {
+          return await applySuccess();
+        }
+
+        const apiError = fallback.errors && fallback.errors.length > 0 ? fallback.errors[0] : null;
+        this.actionMessage.set(apiError || fallback.message || 'Unable to update order status right now.');
+        const clearTimer = setTimeout(() => this.actionMessage.set(''), 4000);
+        this.pulseTimers.add(clearTimer);
+        return false;
+      } catch (fallbackError) {
+        const httpError = fallbackError instanceof HttpErrorResponse
+          ? fallbackError
+          : (error instanceof HttpErrorResponse ? error : null);
+
+        this.actionMessage.set(httpError?.error?.error?.message || httpError?.error?.message || 'Status update failed. Check API connection.');
+        const clearTimer = setTimeout(() => this.actionMessage.set(''), 4000);
+        this.pulseTimers.add(clearTimer);
+        return false;
+      }
+    }
+  }
+  private normalizeMobileNumber(rawValue: unknown, fallbackValue: unknown): string {
+    const raw = typeof rawValue === 'string' ? rawValue.trim() : '';
+    if (raw) return raw;
+    return typeof fallbackValue === 'string' ? fallbackValue.trim() : '';
+  }
+
+  private normalizeRoomNumber(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const cleaned = value.replace(/[^\x20-\x7E]/g, '').trim();
+    if (!cleaned || cleaned === '-') {
+      return undefined;
+    }
+    return cleaned;
+  }
+
+  private loadPrintedKotMap(): Record<number, string> {
+    if (typeof window === 'undefined') {
+      return {};
+    }
+
+    const raw = localStorage.getItem(this.printedKotStorageKey);
+    if (!raw) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return {};
+      }
+
+      const next: Record<number, string> = {};
+      Object.entries(parsed).forEach(([key, value]) => {
+        const orderId = Number(key);
+        if (!Number.isFinite(orderId) || orderId <= 0 || typeof value !== 'string' || !value.trim()) {
+          return;
+        }
+        next[orderId] = value;
+      });
+      return next;
+    } catch {
+      return {};
+    }
+  }
+  private loadKitchenSession(): KitchenSessionState | null {
     if (typeof window === 'undefined') {
       return null;
     }
 
     const raw = localStorage.getItem(this.kitchenSessionKey);
-    const kitchenId = Number(raw);
-    return Number.isFinite(kitchenId) && kitchenId > 0 ? kitchenId : null;
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<KitchenSessionState>;
+      const kitchenId = Number(parsed.kitchenId);
+      if (!Number.isFinite(kitchenId) || kitchenId <= 0) {
+        return null;
+      }
+
+      return {
+        kitchenId,
+        kitchenName: String(parsed.kitchenName ?? '').trim() || 'Kitchen Dashboard',
+        cityName: String(parsed.cityName ?? '').trim() || 'Unknown City',
+        loginUsername: String(parsed.loginUsername ?? '').trim()
+      };
+    } catch {
+      const kitchenId = Number(raw);
+      if (!Number.isFinite(kitchenId) || kitchenId <= 0) {
+        return null;
+      }
+
+      return {
+        kitchenId,
+        kitchenName: 'Kitchen Dashboard',
+        cityName: 'Unknown City',
+        loginUsername: ''
+      };
+    }
   }
 
   private loadMenuItems(): MenuInventoryItem[] {
@@ -596,8 +1172,18 @@ export class KitchenDashboardComponent implements OnDestroy {
       // Browser may block sound until user interaction.
     }
   }
-
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

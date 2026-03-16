@@ -5,7 +5,7 @@
         <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back"></button>
         <div>
           <h1>{{ selectedHotel.name }}</h1>
-          <p>{{ hotelContext().cityName }} • Verify to Order</p>
+          <p>{{ hotelContext().cityName }}{{ hotelContext().stateName && hotelContext().stateName !== '-' ? ', ' + hotelContext().stateName : '' }} • Verify to Order</p>
         </div>
       </header>
 
@@ -16,21 +16,21 @@
           </div>
           <div>
             <h2>{{ selectedHotel.name }}</h2>
-            <p>Andheri West, Mumbai 400058</p>
+            <p>{{ selectedHotel.addressLine }}</p>
           </div>
         </section>
 
         <section class="stepper">
           <div class="step" [class.done]="stepDone(1)" [class.current]="currentStep() === 1">
-            <span>{{ stepDone(1) ? '✓' : '1' }}</span><label>Room</label>
+            <span>{{ stepDone(1) ? '?' : '1' }}</span><label>Room</label>
           </div>
           <div class="line" [class.active]="stepDone(1)"></div>
           <div class="step" [class.done]="stepDone(2)" [class.current]="currentStep() === 2">
-            <span>{{ stepDone(2) ? '✓' : '2' }}</span><label>Mobile</label>
+            <span>{{ stepDone(2) ? '?' : '2' }}</span><label>Mobile</label>
           </div>
           <div class="line" [class.active]="stepDone(2)"></div>
           <div class="step" [class.done]="stepDone(3)" [class.current]="currentStep() === 3">
-            <span>{{ stepDone(3) ? '✓' : '3' }}</span><label>Verify</label>
+            <span>{{ stepDone(3) ? '?' : '3' }}</span><label>Verify</label>
           </div>
         </section>
 
@@ -91,7 +91,64 @@
         <span>QR Hotel Ordering System</span>
         <i class="pi pi-chevron-down"></i>
       </div>
+      @if (trackedOrders().length > 0) {
+        <section class="order-status-panel">
+          <button type="button" class="order-status-toggle" (click)="toggleOrderStatusPanel()">
+            <div>
+              <strong>Order Status</strong>
+              <span>{{ trackedOrders().length }} order(s)</span>
+            </div>
+            <i class="pi" [class.pi-chevron-up]="orderStatusPanelOpen()" [class.pi-chevron-down]="!orderStatusPanelOpen()"></i>
+          </button>
 
+          @if (orderStatusPanelOpen()) {
+            <div class="order-status-list">
+              @for (order of trackedOrders(); track order.orderNo) {
+                <article class="order-status-card">
+                  <button type="button" class="order-card-head" (click)="toggleTrackedOrder(order.orderNo)">
+                    <div>
+                      <h4>{{ order.orderNo }}</h4>
+                      <p>Live Status: {{ order.status }}</p>
+                    </div>
+                    <i class="pi" [class.pi-chevron-up]="isTrackedOrderExpanded(order.orderNo)" [class.pi-chevron-down]="!isTrackedOrderExpanded(order.orderNo)"></i>
+                  </button>
+
+                  @if (isTrackedOrderExpanded(order.orderNo)) {
+                    <div class="order-card-body">
+                      @if (order.status !== 'Rejected') {
+                        <div class="order-status-tracker with-labels" aria-label="Order progress">
+                          @for (stage of orderTrackerStages; track stage; let i = $index) {
+                            <div class="tracker-node-wrap labeled">
+                              <span class="tracker-node" [class.done]="isTrackerStageDone(stage, order.status)">
+                                @if (stage === 'Delivered' && isTrackerStageDone(stage, order.status)) {
+                                  <i class="pi pi-check"></i>
+                                }
+                              </span>
+                              <small [class.done]="isTrackerStageDone(stage, order.status)">{{ stage }}</small>
+                              @if (i < orderTrackerStages.length - 1) {
+                                <span class="tracker-line" [class.done]="isTrackerConnectorDone(i, order.status)"></span>
+                              }
+                            </div>
+                          }
+                        </div>
+                      } @else {
+                        <div class="order-status-rejected">Order was rejected by kitchen.</div>
+                      }
+
+                      <div class="order-card-details">
+                        <span>Updated: {{ formatStatusTime(order.updatedAt) }}</span>
+                        <span>Created: {{ formatStatusTime(order.createdAt) }}</span>
+                        <span>Payment: {{ order.paymentMethod }} • {{ order.paymentStatus }}</span>
+                        <strong>Total: {{ formatCurrency(order.totalAmount, order.currencyCode) }}</strong>
+                      </div>
+                    </div>
+                  }
+                </article>
+              }
+            </div>
+          }
+        </section>
+      }
       @if (showOrderPlaced()) {
         <section class="menu-top cart-top">
           <div class="title-wrap">
@@ -115,7 +172,7 @@
             <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back"></button>
             <div class="menu-head-copy">
               <h1>{{ selectedHotel.name }}</h1>
-              <p>Room {{ roomNumber() }} • {{ hotelContext().cityName }}</p>
+              <p>Room {{ roomNumber() }} • {{ hotelContext().cityName }}{{ hotelContext().stateName && hotelContext().stateName !== '-' ? ', ' + hotelContext().stateName : '' }}</p>
             </div>
             @if (cartItemCount() > 0) {
               <button type="button" class="top-cart-btn" aria-label="Cart" (click)="openCart()">
@@ -149,7 +206,11 @@
               <button type="button" class="menu-panel-header" (click)="toggleCategory(section.category.id)">
                 <div class="header-row">
                   <div class="category-head">
-                    <span class="cat-icon">🍽</span>
+                    @if (section.category.icon && isCategoryIconImage(section.category.icon)) {
+                      <img class="cat-icon-img" [src]="section.category.icon" [alt]="section.category.name + ' icon'" />
+                    } @else {
+                      <span class="cat-icon">{{ categoryDisplayIcon(section.category) }}</span>
+                    }
                     <span>{{ section.category.name }}</span>
                     <span class="count-pill">{{ section.items.length }}</span>
                   </div>
@@ -174,12 +235,12 @@
                       </div>
 
                       <div class="item-right">
-                        <img [src]="itemImage(item.id)" [alt]="item.name" />
+                        <img [src]="itemImage(item)" [alt]="item.name" />
                         @if (cartQuantity(item.id) === 0) {
                           <button type="button" class="add-btn" (click)="addToCart(item.id)">+ Add</button>
                         } @else {
                           <div class="qty-wrap">
-                            <button type="button" class="qty-btn" (click)="decreaseQuantity(item.id)">−</button>
+                            <button type="button" class="qty-btn" (click)="decreaseQuantity(item.id)">-</button>
                             <span>{{ cartQuantity(item.id) }}</span>
                             <button type="button" class="qty-btn" (click)="increaseQuantity(item.id)">+</button>
                           </div>
@@ -230,7 +291,7 @@
 
                 <div class="cart-item-right">
                   <div class="qty-wrap cart-qty">
-                    <button type="button" class="qty-btn light" (click)="decreaseQuantity(line.itemId)">−</button>
+                    <button type="button" class="qty-btn light" (click)="decreaseQuantity(line.itemId)">-</button>
                     <span>{{ line.quantity }}</span>
                     <button type="button" class="qty-btn light" (click)="increaseQuantity(line.itemId)">+</button>
                     <button type="button" class="qty-btn danger" (click)="removeFromCart(line.itemId)">
@@ -318,3 +379,11 @@
     }
   }
 </div>
+
+
+
+
+
+
+
+

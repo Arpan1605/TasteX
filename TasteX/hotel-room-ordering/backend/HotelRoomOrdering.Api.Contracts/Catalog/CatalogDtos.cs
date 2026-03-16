@@ -47,11 +47,13 @@ public sealed record MenuItemDto(
     string? Description,
     decimal Price,
     bool IsVeg,
-    bool IsAvailable);
+    bool IsAvailable,
+    string? ImageUrl);
 
 public sealed record MenuCategoryDto(
     long CategoryId,
     string CategoryName,
+    string? CategoryIcon,
     int SortOrder,
     IReadOnlyList<MenuItemDto> Items);
 
@@ -61,6 +63,14 @@ public sealed record HotelMenuResponse(
     string HotelName,
     long CityId,
     string CityName,
+    string? StateName,
+    string? HotelAddressLine,
     long KitchenId,
     string KitchenName,
     IReadOnlyList<MenuCategoryDto> Categories);
+
+
+
+
+
+

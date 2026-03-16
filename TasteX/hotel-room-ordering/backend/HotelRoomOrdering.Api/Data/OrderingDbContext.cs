@@ -70,6 +70,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
             entity.HasIndex(x => x.CategoryCode).IsUnique();
             entity.Property(x => x.CategoryCode).HasMaxLength(32);
             entity.Property(x => x.Name).HasMaxLength(120);
+            entity.Property(x => x.CategoryIcon).HasMaxLength(400);
         });
 
         modelBuilder.Entity<Item>(entity =>
@@ -133,6 +134,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
             entity.HasIndex(x => x.OrderNumber).IsUnique();
             entity.Property(x => x.OrderNumber).HasMaxLength(40);
             entity.Property(x => x.MobileNumber).HasMaxLength(20);
+            entity.Property(x => x.RoomNumber).HasMaxLength(20);
             entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsFixedLength();
             entity.Property(x => x.SubTotalAmount).HasPrecision(12, 2);
             entity.Property(x => x.TaxAmount).HasPrecision(12, 2);
@@ -210,3 +212,6 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
         });
     }
 }
+
+
+

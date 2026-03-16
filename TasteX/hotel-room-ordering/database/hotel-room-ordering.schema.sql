@@ -71,6 +71,7 @@ CREATE TABLE dbo.Categories (
     CategoryId BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
     CategoryCode NVARCHAR(32) NOT NULL,
     Name NVARCHAR(120) NOT NULL,
+    CategoryIcon NVARCHAR(400) NULL,
     SortOrder INT NOT NULL,
     IsActive BIT NOT NULL CONSTRAINT DF_Categories_IsActive DEFAULT (1),
     CreatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_Categories_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
@@ -179,6 +180,7 @@ CREATE TABLE dbo.Orders (
     HotelId BIGINT NOT NULL,
     KitchenId BIGINT NOT NULL,
     MobileNumber NVARCHAR(20) NOT NULL,
+    RoomNumber NVARCHAR(20) NULL,
     CurrencyCode CHAR(3) NOT NULL CONSTRAINT DF_Orders_CurrencyCode DEFAULT ('INR'),
     SubTotalAmount DECIMAL(12,2) NOT NULL,
     TaxAmount DECIMAL(12,2) NOT NULL CONSTRAINT DF_Orders_TaxAmount DEFAULT (0),
@@ -394,18 +396,11 @@ FROM dbo.Cities c
 JOIN dbo.Kitchens k ON k.KitchenCode = 'BLR-SOUTH'
 WHERE c.CityCode = 'BLR';
 
-INSERT INTO dbo.Categories (CategoryCode, Name, SortOrder) VALUES
-('BREAKFAST', 'Breakfast', 1),
-('MAIN', 'Main Course', 2),
-('SNACKS', 'Snacks', 3),
-('BEVERAGES', 'Beverages', 4);
+INSERT INTO dbo.Categories (CategoryCode, Name, CategoryIcon, SortOrder) VALUES
+('BREAKFAST', 'Breakfast', NULL, 1),
+('MAIN', 'Main Course', NULL, 2),
+('SNACKS', 'Snacks', NULL, 3),
+('BEVERAGES', 'Beverages', NULL, 4);
 GO
-
-
-
-
-
-
-
 
 

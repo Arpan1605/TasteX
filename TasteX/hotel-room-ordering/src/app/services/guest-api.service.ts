@@ -23,11 +23,13 @@ export interface GuestMenuItemDto {
   price: number;
   isVeg: boolean;
   isAvailable: boolean;
+  imageUrl?: string | null;
 }
 
 export interface GuestMenuCategoryDto {
   categoryId: number;
   categoryName: string;
+  categoryIcon?: string | null;
   sortOrder: number;
   items: GuestMenuItemDto[];
 }
@@ -38,6 +40,8 @@ export interface HotelMenuResponseDto {
   hotelName: string;
   cityId: number;
   cityName: string;
+  stateName?: string | null;
+  hotelAddressLine?: string | null;
   kitchenId: number;
   kitchenName: string;
   categories: GuestMenuCategoryDto[];
@@ -72,6 +76,7 @@ export interface VerifyOtpResponse {
 export interface CheckoutRequest {
   guestSessionToken: string;
   hotelCode: string;
+  roomNumber?: string;
   currencyCode: string;
   paymentMethod: number;
   lines: Array<{ itemId: number; quantity: number }>;
@@ -89,6 +94,20 @@ export interface CheckoutResponse {
   paymentMethod: number;
   createdAtUtc: string;
   lines: Array<{ itemId: number; itemName: string; quantity: number; unitPrice: number; lineTotal: number }>;
+}
+
+export interface GuestOrderStatusResponse {
+  orderId: number;
+  orderNumber: string;
+  hotelCode: string;
+  paymentMethod: number | string;
+  paymentStatus: number | string;
+  orderStatus: number | string;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+  serviceTimeMinutes: number;
+  totalAmount: number;
+  currencyCode: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -111,6 +130,9 @@ export class GuestApiService {
   checkout(request: CheckoutRequest): Observable<ApiResponse<CheckoutResponse>> {
     return this.http.post<ApiResponse<CheckoutResponse>>(`${this.baseUrl}/checkout`, request);
   }
-}
 
+  getOrderStatus(orderNumber: string): Observable<ApiResponse<GuestOrderStatusResponse>> {
+    return this.http.get<ApiResponse<GuestOrderStatusResponse>>(`${this.baseUrl}/orders/${encodeURIComponent(orderNumber)}/status`);
+  }
+}
 

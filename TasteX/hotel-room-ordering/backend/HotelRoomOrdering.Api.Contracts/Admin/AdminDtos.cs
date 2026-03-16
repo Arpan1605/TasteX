@@ -78,6 +78,7 @@ public sealed record AdminMenuItemDto(
 public sealed record AdminMenuCategoryDto(
     long CategoryId,
     string CategoryName,
+    string? CategoryIcon,
     int SortOrder,
     IReadOnlyList<AdminMenuItemDto> Items);
 
@@ -97,6 +98,7 @@ public sealed record UpdateMenuItemStatusRequest(
 
 public sealed record UpsertCategoryRequest(
     string Name,
+    string? CategoryIcon,
     int SortOrder,
     bool IsActive);
 
@@ -116,3 +118,5 @@ public sealed record UpdateHotelMenuItemStatusRequest(
 
 public sealed record UpdateHotelMenuInventoryRequest(
     int InventoryQuantity);
+
+

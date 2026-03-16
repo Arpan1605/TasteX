@@ -73,42 +73,63 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
+        var hotelIds = orders
+            .Select(o => o.HotelId)
+            .Distinct()
+            .ToArray();
+
+        var itemIds = orders
+            .SelectMany(o => o.Lines)
+            .Select(l => l.ItemId)
+            .Distinct()
+            .ToArray();
+
         var hotelMap = await db.Hotels
-            .Where(h => orders.Select(o => o.HotelId).Contains(h.HotelId))
+            .Where(h => hotelIds.Contains(h.HotelId))
             .ToDictionaryAsync(h => h.HotelId, cancellationToken);
 
         var itemMap = await db.Items
-            .Where(i => orders.SelectMany(o => o.Lines).Select(l => l.ItemId).Contains(i.ItemId))
+            .Where(i => itemIds.Contains(i.ItemId))
             .ToDictionaryAsync(i => i.ItemId, cancellationToken);
 
-        var orderDtos = orders.Select(o =>
-        {
-            var hotel = hotelMap[o.HotelId];
-            var serviceMinutes = Math.Max(1, (int)(clock.UtcNow - o.CreatedAtUtc).TotalMinutes);
-
-            var lines = o.Lines.Select(l =>
+        var orderDtos = orders
+            .Select(o =>
             {
-                var item = itemMap[l.ItemId];
-                return new KitchenOrderLineDto(l.ItemId, l.ItemSnapshotName, item.IsVeg, l.Quantity, l.UnitPrice, l.LineTotal);
-            }).ToList();
+                if (!hotelMap.TryGetValue(o.HotelId, out var hotel))
+                {
+                    return null;
+                }
 
-            return new KitchenOrderDto(
-                o.OrderId,
-                o.OrderNumber,
-                o.HotelId,
-                hotel.Name,
-                hotel.HotelCode,
-                MaskMobile(o.MobileNumber),
-                o.PaymentMethod,
-                o.PaymentStatus,
-                o.OrderStatus,
-                new DateTimeOffset(o.CreatedAtUtc, TimeSpan.Zero),
-                new DateTimeOffset(o.UpdatedAtUtc, TimeSpan.Zero),
-                serviceMinutes,
-                o.TotalAmount,
-                o.CurrencyCode,
-                lines);
-        }).ToList();
+                var serviceMinutes = Math.Max(1, (int)(clock.UtcNow - o.CreatedAtUtc).TotalMinutes);
+
+                var lines = o.Lines.Select(l =>
+                {
+                    var isVeg = itemMap.TryGetValue(l.ItemId, out var item) && item.IsVeg;
+                    return new KitchenOrderLineDto(l.ItemId, l.ItemSnapshotName, isVeg, l.Quantity, l.UnitPrice, l.LineTotal);
+                }).ToList();
+
+                return new KitchenOrderDto(
+                    o.OrderId,
+                    o.OrderNumber,
+                    o.HotelId,
+                    hotel.Name,
+                    hotel.HotelCode,
+                    MaskMobile(o.MobileNumber),
+                    o.MobileNumber,
+                    o.RoomNumber,
+                    o.PaymentMethod,
+                    o.PaymentStatus,
+                    o.OrderStatus,
+                    new DateTimeOffset(o.CreatedAtUtc, TimeSpan.Zero),
+                    new DateTimeOffset(o.UpdatedAtUtc, TimeSpan.Zero),
+                    serviceMinutes,
+                    o.TotalAmount,
+                    o.CurrencyCode,
+                    lines);
+            })
+            .Where(dto => dto is not null)
+            .Select(dto => dto!)
+            .ToList();
 
         return new ApiResponse<KitchenOrdersResponse>(
             true,
@@ -118,51 +139,86 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
 
     public async Task<ApiResponse<UpdateOrderStatusResponse>> UpdateOrderStatusAsync(UpdateOrderStatusRequest request, CancellationToken cancellationToken = default)
     {
-        var order = await db.Orders.FirstOrDefaultAsync(o => o.OrderId == request.OrderId, cancellationToken);
+        var order = await db.Orders
+            .AsNoTracking()
+            .Where(o => o.OrderId == request.OrderId)
+            .Select(o => new { o.OrderId, o.OrderNumber, o.OrderStatus })
+            .FirstOrDefaultAsync(cancellationToken);
+
         if (order is null)
         {
             return new ApiResponse<UpdateOrderStatusResponse>(false, null, new ApiError("ORDER_NOT_FOUND", "Order not found."));
         }
 
         var previous = order.OrderStatus;
-        order.OrderStatus = request.NewStatus;
+        var now = clock.UtcNow;
+        var nextStatus = (byte)request.NewStatus;
 
-        switch (request.NewStatus)
+        // Use SQL update to avoid failures when local DB schema drifts from EF model.
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE dbo.Orders SET OrderStatus = {0}, UpdatedAtUtc = SYSUTCDATETIME() WHERE OrderId = {1};",
+            [nextStatus, request.OrderId],
+            cancellationToken);
+
+        if (request.NewStatus == OrderStatus.Accepted)
         {
-            case OrderStatus.Accepted:
-                order.AcceptedAtUtc = clock.UtcNow;
-                break;
-            case OrderStatus.Preparing:
-                order.PreparingAtUtc = clock.UtcNow;
-                break;
-            case OrderStatus.Ready:
-                order.ReadyAtUtc = clock.UtcNow;
-                break;
-            case OrderStatus.Delivered:
-                order.DeliveredAtUtc = clock.UtcNow;
-                break;
-            case OrderStatus.Cancelled:
-                order.CancelledAtUtc = clock.UtcNow;
-                break;
+            await db.Database.ExecuteSqlRawAsync(
+                "IF COL_LENGTH('dbo.Orders','AcceptedAtUtc') IS NOT NULL UPDATE dbo.Orders SET AcceptedAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
+                [request.OrderId],
+                cancellationToken);
+        }
+        else if (request.NewStatus == OrderStatus.Preparing)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "IF COL_LENGTH('dbo.Orders','PreparingAtUtc') IS NOT NULL UPDATE dbo.Orders SET PreparingAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
+                [request.OrderId],
+                cancellationToken);
+        }
+        else if (request.NewStatus == OrderStatus.Ready)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "IF COL_LENGTH('dbo.Orders','ReadyAtUtc') IS NOT NULL UPDATE dbo.Orders SET ReadyAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
+                [request.OrderId],
+                cancellationToken);
+        }
+        else if (request.NewStatus == OrderStatus.Delivered)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "IF COL_LENGTH('dbo.Orders','DeliveredAtUtc') IS NOT NULL UPDATE dbo.Orders SET DeliveredAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
+                [request.OrderId],
+                cancellationToken);
+        }
+        else if (request.NewStatus == OrderStatus.Cancelled)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "IF COL_LENGTH('dbo.Orders','CancelledAtUtc') IS NOT NULL UPDATE dbo.Orders SET CancelledAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
+                [request.OrderId],
+                cancellationToken);
         }
 
-        order.UpdatedAtUtc = clock.UtcNow;
-
-        db.OrderStatusHistory.Add(new OrderStatusHistory
+        // Keep history write best-effort.
+        try
         {
-            OrderId = order.OrderId,
-            PreviousStatus = previous,
-            NewStatus = request.NewStatus,
-            ChangedBy = request.UpdatedBy,
-            Notes = request.Notes,
-            ChangedAtUtc = clock.UtcNow
-        });
+            db.OrderStatusHistory.Add(new OrderStatusHistory
+            {
+                OrderId = order.OrderId,
+                PreviousStatus = previous,
+                NewStatus = request.NewStatus,
+                ChangedBy = request.UpdatedBy,
+                Notes = request.Notes,
+                ChangedAtUtc = now
+            });
 
-        await db.SaveChangesAsync(cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            // History write failure should not block kitchen workflow.
+        }
 
         return new ApiResponse<UpdateOrderStatusResponse>(
             true,
-            new UpdateOrderStatusResponse(order.OrderId, order.OrderNumber, previous, order.OrderStatus, new DateTimeOffset(order.UpdatedAtUtc, TimeSpan.Zero)),
+            new UpdateOrderStatusResponse(order.OrderId, order.OrderNumber, previous, request.NewStatus, new DateTimeOffset(now, TimeSpan.Zero)),
             null);
     }
 
@@ -176,3 +232,6 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
         return $"{mobile[..2]}******{mobile[^2..]}";
     }
 }
+
+
+

@@ -1,4 +1,4 @@
-<div class="kd-page">
+ï»¿<div class="kd-page">
   @if (!selectedKitchenId()) {
     <section class="kitchen-login-shell">
       <article class="kitchen-login-card">
@@ -78,8 +78,8 @@
       <div class="select-wrap">
         <select [ngModel]="selectedHotelId() ?? ''" (ngModelChange)="setHotelFilter($event)">
           <option value="">All Hotels</option>
-          @for (hotel of kitchenHotels(); track hotel.id) {
-            <option [value]="hotel.id">{{ hotel.name }}</option>
+          @for (hotel of kitchenHotels(); track hotel.hotelId) {
+            <option [value]="hotel.hotelId">{{ hotel.name }}</option>
           }
         </select>
         <i class="pi pi-chevron-down"></i>
@@ -93,29 +93,91 @@
         }
       </div>
     </section>
-
-    <section class="inventory-card">
-      <div class="inventory-head">
-        <div>
-          <h2>Live Inventory</h2>
-          <p>Read only view synced from Admin Dashboard inventory</p>
+    <section class="billing-card">
+      <div
+        class="billing-head"
+        role="button"
+        tabindex="0"
+        (click)="toggleBillingPanel()"
+        (keydown.enter)="toggleBillingPanel()"
+        (keydown.space)="toggleBillingPanel(); $event.preventDefault()"
+      >
+        <div class="panel-toggle-content">
+          <h2>Billing / KOT</h2>
+          <p>Kitchen Order Tickets are auto-printed for new orders and can be reprinted anytime.</p>
+        </div>
+        <div class="panel-head-actions" (click)="$event.stopPropagation()">
+          <label class="auto-print-toggle">
+            <input type="checkbox" [ngModel]="autoPrintKot()" (ngModelChange)="autoPrintKot.set(!!$event)" />
+            Auto Print
+          </label>
+          <button type="button" class="icon-toggle" (click)="toggleBillingPanel()">
+            <i class="pi" [class.pi-chevron-up]="showBillingPanel()" [class.pi-chevron-down]="!showBillingPanel()"></i>
+          </button>
         </div>
       </div>
 
-      <div class="inventory-grid">
-        @for (item of inventoryRows(); track item.itemId) {
-          <article class="inventory-item">
-            <div class="inventory-title-row">
-              <span class="food-dot" [class.veg]="item.isVeg" [class.nonveg]="!item.isVeg"></span>
-              <strong>{{ item.name }}</strong>
-            </div>
-            <div class="inventory-stats">
-              <span>Available: {{ item.available }}</span>
-              <small>Base: {{ item.baseInventory }}</small>
-            </div>
-          </article>
-        }
+      @if (showBillingPanel()) {
+        <div class="billing-list">
+          @if (kotQueueRows().length === 0) {
+            <p class="billing-empty">No active orders waiting for KOT.</p>
+          } @else {
+            @for (row of kotQueueRows(); track row.id) {
+              <article class="billing-row">
+                <div class="billing-info">
+                  <strong>{{ row.orderNo }}</strong>
+                  <span>{{ row.hotelName }} - Room {{ row.roomNumber || '-' }}</span>
+                  <small>{{ row.lines.length }} item(s) - {{ row.totalAmount | currency:'INR':'symbol':'1.0-0' }}</small>
+                </div>
+                <div class="billing-actions">
+                  @if (isKotPrinted(row.id)) {
+                    <small>Printed: {{ kotPrintedTime(row.id) }}</small>
+                    <button type="button" class="btn-kot" (click)="reprintKot(row.id)">Reprint KOT</button>
+                  } @else {
+                    <small>Not printed</small>
+                    <button type="button" class="btn-kot" (click)="printKot(row.id)">Print KOT</button>
+                  }
+                </div>
+              </article>
+            }
+          }
+        </div>
+      }
+    </section>
+    <section class="inventory-card">
+      <div
+        class="inventory-head"
+        role="button"
+        tabindex="0"
+        (click)="toggleInventoryPanel()"
+        (keydown.enter)="toggleInventoryPanel()"
+        (keydown.space)="toggleInventoryPanel(); $event.preventDefault()"
+      >
+        <div class="panel-toggle-content">
+          <h2>Live Inventory</h2>
+          <p>Read only view synced from Admin Dashboard inventory</p>
+        </div>
+        <button type="button" class="icon-toggle" (click)="$event.stopPropagation(); toggleInventoryPanel()">
+          <i class="pi" [class.pi-chevron-up]="showInventoryPanel()" [class.pi-chevron-down]="!showInventoryPanel()"></i>
+        </button>
       </div>
+
+      @if (showInventoryPanel()) {
+        <div class="inventory-grid">
+          @for (item of inventoryRows(); track item.itemId) {
+            <article class="inventory-item">
+              <div class="inventory-title-row">
+                <span class="food-dot" [class.veg]="item.isVeg" [class.nonveg]="!item.isVeg"></span>
+                <strong>{{ item.name }}</strong>
+              </div>
+              <div class="inventory-stats">
+                <span>Available: {{ item.available }}</span>
+                <small>Base: {{ item.baseInventory }}</small>
+              </div>
+            </article>
+          }
+        </div>
+      }
     </section>
 
     <section class="orders-list">
@@ -136,7 +198,8 @@
                 <strong>{{ row.orderNo }}</strong>
                 <button type="button" class="status-pill" [class]="'status-pill ' + statusClass(row)" (click)="$event.stopPropagation()">{{ statusLabel(row) }}</button>
               </div>
-              <p>{{ row.hotelName }} • Room {{ row.roomNumber || '-' }}</p>
+              <p>{{ row.hotelName }} - Room {{ row.roomNumber || '-' }}</p>
+              <p>Mobile: {{ row.mobile || '-' }}</p>
             </div>
 
             <div class="order-right">
@@ -164,15 +227,15 @@
 
                 @if (statusClass(row) === 'accepted') {
                   <div class="decision-row">
-                    <button type="button" class="btn-start" (click)="startPreparing(row.id)">Start Preparing</button>
-                    <button type="button" class="btn-reject" (click)="openRejectDialog(row.id)">Reject</button>
+                    <button type="button" class="btn-start" (click)="$event.stopPropagation(); startPreparing(row.id)">Start Preparing</button>
+                    <button type="button" class="btn-reject" (click)="$event.stopPropagation(); openRejectDialog(row.id)">Reject</button>
                   </div>
                 }
 
                 @if (statusClass(row) === 'preparing') {
                   <p class="placed-at">Preparing started: {{ placedTime(row.preparingStartedAt || row.updatedAt) }}</p>
                   <div class="decision-row one">
-                    <button type="button" class="btn-start" (click)="markReady(row.id)">Mark Ready</button>
+                    <button type="button" class="btn-start" (click)="$event.stopPropagation(); markReady(row.id)">Mark Ready</button>
                   </div>
                 }
 
@@ -180,7 +243,7 @@
                   <p class="placed-at">Preparing started: {{ placedTime(row.preparingStartedAt || row.updatedAt) }}</p>
                   <p class="placed-at">Ready: {{ placedTime(row.readyAt || row.updatedAt) }}</p>
                   <div class="decision-row one">
-                    <button type="button" class="btn-start" (click)="markDelivered(row.id)">Mark Delivered</button>
+                    <button type="button" class="btn-start" (click)="$event.stopPropagation(); markDelivered(row.id)">Mark Delivered</button>
                   </div>
                 }
 
@@ -192,8 +255,8 @@
 
                 @if (isNewOrder(row)) {
                   <div class="decision-row">
-                    <button type="button" class="btn-accept" (click)="acceptOrder(row.id)">Accept</button>
-                    <button type="button" class="btn-reject" (click)="openRejectDialog(row.id)">Reject</button>
+                    <button type="button" class="btn-accept" (click)="$event.stopPropagation(); acceptOrder(row.id)">Accept</button>
+                    <button type="button" class="btn-reject" (click)="$event.stopPropagation(); openRejectDialog(row.id)">Reject</button>
                   </div>
                 }
               </div>
@@ -227,4 +290,13 @@
     </section>
   }
 </div>
+
+
+
+
+
+
+
+
+
 

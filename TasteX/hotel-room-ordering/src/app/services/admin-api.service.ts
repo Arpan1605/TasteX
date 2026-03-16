@@ -88,6 +88,7 @@ export interface AdminMenuItemDto {
 export interface AdminMenuCategoryDto {
   categoryId: number;
   categoryName: string;
+  categoryIcon?: string | null;
   sortOrder: number;
   items: AdminMenuItemDto[];
 }
@@ -110,6 +111,7 @@ export interface UpdateMenuItemStatusRequest {
 
 export interface UpsertCategoryRequest {
   name: string;
+  categoryIcon?: string;
   sortOrder: number;
   isActive: boolean;
 }

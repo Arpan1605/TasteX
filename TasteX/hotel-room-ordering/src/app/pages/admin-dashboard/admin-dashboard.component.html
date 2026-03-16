@@ -357,7 +357,11 @@
           <article class="menu-group-card">
             <header class="menu-group-head">
               <div class="group-title-wrap">
-                <i class="pi" [class]="menuCategoryIcon(group.categoryName)"></i>
+                @if (group.categoryIcon && isCategoryIconImage(group.categoryIcon)) {
+                  <img class="category-icon-img" [src]="group.categoryIcon" [alt]="group.categoryName + ' icon'" />
+                } @else {
+                  <span class="category-icon-emoji">{{ categoryDisplayIcon(group) }}</span>
+                }
                 <h2>{{ group.categoryName }}</h2>
                 <span>({{ group.items.length }} items)</span>
               </div>
@@ -864,6 +868,15 @@
         placeholder="e.g., Breakfast"
       />
 
+      <label for="categoryIcon">Category Icon (Emoji or Image URL)</label>
+      <input
+        id="categoryIcon"
+        type="text"
+        [value]="categoryIconInput()"
+        (input)="categoryIconInput.set(($any($event.target)).value); categoryFormError.set('')"
+        placeholder="e.g., icon emoji or https://.../icon.png"
+      />
+
       <label for="categorySort">Sort Order</label>
       <input
         id="categorySort"
@@ -1027,33 +1040,4 @@
     </section>
   }
 </div>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

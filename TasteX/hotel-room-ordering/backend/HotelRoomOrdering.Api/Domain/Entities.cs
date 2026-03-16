@@ -58,6 +58,7 @@ public sealed class Category
     public long CategoryId { get; set; }
     public string CategoryCode { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string? CategoryIcon { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAtUtc { get; set; }
@@ -157,6 +158,7 @@ public sealed class Order
     public long HotelId { get; set; }
     public long KitchenId { get; set; }
     public string MobileNumber { get; set; } = string.Empty;
+    public string? RoomNumber { get; set; }
     public string CurrencyCode { get; set; } = "INR";
     public decimal SubTotalAmount { get; set; }
     public decimal TaxAmount { get; set; }
@@ -260,8 +262,6 @@ public sealed class WebhookLog
     public long? RelatedOrderId { get; set; }
     public long? RelatedPaymentOrderId { get; set; }
 }
-
-
 
 
 

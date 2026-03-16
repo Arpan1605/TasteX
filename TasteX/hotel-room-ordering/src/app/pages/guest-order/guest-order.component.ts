@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+﻿import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -15,6 +15,8 @@ interface GuestHotelView {
   code: string;
   name: string;
   cityName: string;
+  stateName: string;
+  addressLine: string;
   kitchenName: string;
 }
 
@@ -26,10 +28,11 @@ interface MenuItemView {
   price: number;
   isVeg: boolean;
   active: boolean;
+  imageUrl: string;
 }
 
 interface MenuSectionView {
-  category: { id: number; name: string; sortOrder: number };
+  category: { id: number; name: string; icon: string; sortOrder: number };
   items: MenuItemView[];
 }
 
@@ -73,12 +76,16 @@ export class GuestOrderComponent implements OnDestroy {
   private readonly hotelCode = signal('');
   private readonly otpSessionId = signal<string | null>(null);
   private readonly guestSessionToken = signal<string | null>(null);
+  private readonly trackedOrderNumbers = signal<string[]>([]);
+  private readonly orderStatusByNumber = signal<Record<string, { status: string; updatedAt: string; createdAt: string; serviceTimeMinutes: number; totalAmount: number; currencyCode: string; paymentStatus: string; paymentMethod: string }>>({});
+  private readonly trackedOrdersStorageKeyPrefix = 'tx_guest_orders_';
   private readonly selectedPreferenceState = signal<FoodPreference>('All');
   private readonly menuSections = signal<MenuSectionView[]>([]);
   private readonly cartLines = signal<CartLineView[]>([]);
 
   private timer: ReturnType<typeof setInterval> | null = null;
   private orderPlacedTimer: ReturnType<typeof setTimeout> | null = null;
+  private orderStatusPoller: ReturnType<typeof setInterval> | null = null;
 
   readonly cartItems = computed(() => this.cartLines());
   readonly cartTotal = computed(() => this.cartLines().reduce((sum, line) => sum + (line.item.price * line.quantity), 0));
@@ -87,13 +94,33 @@ export class GuestOrderComponent implements OnDestroy {
   readonly payableTotal = computed(() => this.cartTotal() + this.gstAmount());
   readonly selectedPreference = computed(() => this.selectedPreferenceState());
   readonly showMenu = computed(() => this.verified());
+  readonly trackedOrders = computed(() => {
+    const numbers = this.trackedOrderNumbers();
+    const lookup = this.orderStatusByNumber();
+    return numbers.map((orderNo) => ({
+      orderNo,
+      ...(lookup[orderNo] ?? {
+        status: 'Accepted',
+        updatedAt: '',
+        createdAt: '',
+        serviceTimeMinutes: 0,
+        totalAmount: 0,
+        currencyCode: 'INR',
+        paymentStatus: 'Pending',
+        paymentMethod: 'COD'
+      })
+    }));
+  });
+  readonly orderStatusPanelOpen = signal(true);
+  readonly expandedTrackedOrders = signal<Set<string>>(new Set());
+  readonly orderTrackerStages = ['Accepted', 'Preparing', 'Ready', 'Delivered'] as const;
 
   readonly hotelContext = computed(() => {
     const selectedHotel = this.hotel();
     if (!selectedHotel) {
-      return { cityName: '-', kitchenName: '-' };
+      return { cityName: '-', stateName: '-', kitchenName: '-' };
     }
-    return { cityName: selectedHotel.cityName, kitchenName: selectedHotel.kitchenName };
+    return { cityName: selectedHotel.cityName, stateName: selectedHotel.stateName, kitchenName: selectedHotel.kitchenName };
   });
 
   readonly timerText = computed(() => {
@@ -159,6 +186,11 @@ export class GuestOrderComponent implements OnDestroy {
   constructor() {
     const code = this.route.snapshot.paramMap.get('hotelCode') ?? '';
     this.hotelCode.set(code);
+    this.trackedOrderNumbers.set(this.loadTrackedOrderNumbers(code));
+    if (this.trackedOrderNumbers().length > 0) {
+      void this.refreshTrackedOrderStatuses();
+      this.startOrderStatusPolling();
+    }
     void this.loadHotelMenu();
   }
 
@@ -168,6 +200,9 @@ export class GuestOrderComponent implements OnDestroy {
     }
     if (this.orderPlacedTimer) {
       clearTimeout(this.orderPlacedTimer);
+    }
+    if (this.orderStatusPoller) {
+      clearInterval(this.orderStatusPoller);
     }
   }
 
@@ -341,12 +376,33 @@ export class GuestOrderComponent implements OnDestroy {
     return line.item.price * line.quantity;
   }
 
+
+  trackerStageIndex(status: string): number {
+    const normalized = (status || '').trim().toLowerCase();
+    if (normalized === 'accepted') return 0;
+    if (normalized === 'preparing') return 1;
+    if (normalized === 'ready') return 2;
+    if (normalized === 'delivered') return 3;
+    if (normalized === 'rejected') return -1;
+    return 0;
+  }
+
+  isTrackerStageDone(stage: string, currentStatus: string): boolean {
+    const targetIndex = this.trackerStageIndex(stage);
+    const currentIndex = this.trackerStageIndex(currentStatus);
+    return currentIndex >= 0 && currentIndex >= targetIndex;
+  }
+
+  isTrackerConnectorDone(index: number, currentStatus: string): boolean {
+    const currentIndex = this.trackerStageIndex(currentStatus);
+    return currentIndex > index;
+  }
   itemEta(itemId: number): string {
     return this.etaByItemId[itemId] ?? '~15 min';
   }
 
-  itemImage(itemId: number): string {
-    return this.imageByItemId[itemId] ?? `https://picsum.photos/seed/${itemId}/140/100`;
+  itemImage(item: MenuItemView): string {
+    return item.imageUrl || this.imageByItemId[item.id] || `https://picsum.photos/seed/${item.id}/140/100`;
   }
 
   vegText(item: MenuItemView): string {
@@ -355,6 +411,23 @@ export class GuestOrderComponent implements OnDestroy {
 
   isCategoryOpen(categoryId: number): boolean {
     return !this.collapsedCategories().has(categoryId);
+  }
+
+  isCategoryIconImage(icon: string): boolean {
+    return /^(https?:\/\/|data:image\/)/i.test((icon || '').trim());
+  }
+
+  categoryDisplayIcon(category: { name: string; icon: string }): string {
+    const direct = (category.icon || '').trim();
+    if (direct && !this.isCategoryIconImage(direct)) return direct;
+
+    const lower = category.name.toLowerCase();
+    if (lower.includes('breakfast')) return '\u{1F373}';
+    if (lower.includes('main')) return '\u{1F35B}';
+    if (lower.includes('snack')) return '\u{1F35F}';
+    if (lower.includes('bev')) return '\u{1F964}';
+    if (lower.includes('shake')) return '\u{1F964}';
+    return '\u{1F37D}\uFE0F';
   }
 
   toggleCategory(categoryId: number): void {
@@ -386,6 +459,7 @@ export class GuestOrderComponent implements OnDestroy {
       const response = await firstValueFrom(this.guestApi.checkout({
         guestSessionToken: token,
         hotelCode: this.hotelCode(),
+        roomNumber: this.roomNumber().trim() || undefined,
         currencyCode: 'INR',
         paymentMethod: 1,
         lines,
@@ -399,8 +473,15 @@ export class GuestOrderComponent implements OnDestroy {
         return;
       }
 
+      const checkoutData = response.data;
       this.checkoutSuccess.set(true);
       this.checkoutMessage.set('Order placed successfully.');
+      const nextOrders = [checkoutData.orderNumber, ...this.trackedOrderNumbers().filter((orderNo) => orderNo !== checkoutData.orderNumber)].slice(0, 12);
+      this.trackedOrderNumbers.set(nextOrders);
+      this.persistTrackedOrderNumbers(this.hotelCode(), nextOrders);
+      this.expandedTrackedOrders.set(new Set([checkoutData.orderNumber]));
+      void this.refreshTrackedOrderStatuses();
+      this.startOrderStatusPolling();
       this.showOrderPlaced.set(true);
       this.showPayment.set(false);
       this.showCart.set(false);
@@ -456,6 +537,8 @@ export class GuestOrderComponent implements OnDestroy {
         code: payload.hotelCode,
         name: payload.hotelName,
         cityName: payload.cityName,
+        stateName: payload.stateName?.trim() || '-',
+        addressLine: payload.hotelAddressLine?.trim() || payload.cityName,
         kitchenName: payload.kitchenName
       });
 
@@ -466,6 +549,7 @@ export class GuestOrderComponent implements OnDestroy {
           category: {
             id: category.categoryId,
             name: category.categoryName,
+            icon: (category.categoryIcon ?? '').trim(),
             sortOrder: category.sortOrder
           },
           items: category.items
@@ -477,7 +561,8 @@ export class GuestOrderComponent implements OnDestroy {
               description: item.description?.trim() || 'Chef special',
               price: item.price,
               isVeg: item.isVeg,
-              active: item.isAvailable
+              active: item.isAvailable,
+              imageUrl: item.imageUrl?.trim() || ''
             }))
         }));
 
@@ -544,6 +629,185 @@ export class GuestOrderComponent implements OnDestroy {
     return fallback;
   }
 
+  toggleOrderStatusPanel(): void {
+    this.orderStatusPanelOpen.update((open) => !open);
+  }
+
+  toggleTrackedOrder(orderNo: string): void {
+    this.expandedTrackedOrders.update((set) => {
+      const next = new Set(set);
+      if (next.has(orderNo)) {
+        next.delete(orderNo);
+      } else {
+        next.add(orderNo);
+      }
+      return next;
+    });
+  }
+
+  isTrackedOrderExpanded(orderNo: string): boolean {
+    return this.expandedTrackedOrders().has(orderNo);
+  }
+
+  formatStatusTime(value: string): string {
+    if (!value) {
+      return '-';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+
+    return new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  }
+
+  formatCurrency(value: number, currencyCode: string): string {
+    if (!Number.isFinite(value)) {
+      return '-';
+    }
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: currencyCode || 'INR',
+        maximumFractionDigits: 0
+      }).format(value);
+    } catch {
+      return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(value);
+    }
+  }
+
+  private startOrderStatusPolling(): void {
+    if (this.orderStatusPoller) {
+      clearInterval(this.orderStatusPoller);
+    }
+
+    this.orderStatusPoller = setInterval(() => {
+      void this.refreshTrackedOrderStatuses();
+    }, 8000);
+  }
+
+  private async refreshTrackedOrderStatuses(): Promise<void> {
+    const orderNumbers = this.trackedOrderNumbers();
+    if (orderNumbers.length === 0) {
+      return;
+    }
+
+    try {
+      const responses = await Promise.all(orderNumbers.map(async (orderNo) => {
+        try {
+          const response = await firstValueFrom(this.guestApi.getOrderStatus(orderNo));
+          return { orderNo, response };
+        } catch {
+          return null;
+        }
+      }));
+
+      const updates: Record<string, { status: string; updatedAt: string; createdAt: string; serviceTimeMinutes: number; totalAmount: number; currencyCode: string; paymentStatus: string; paymentMethod: string }> = { ...this.orderStatusByNumber() };
+
+      responses.forEach((entry) => {
+        if (!entry || !entry.response.success || !entry.response.data) {
+          return;
+        }
+
+        const payload = entry.response.data;
+        updates[entry.orderNo] = {
+          status: this.mapGuestOrderStatus(payload.orderStatus),
+          updatedAt: payload.updatedAtUtc,
+          createdAt: payload.createdAtUtc,
+          serviceTimeMinutes: payload.serviceTimeMinutes,
+          totalAmount: payload.totalAmount,
+          currencyCode: payload.currencyCode,
+          paymentStatus: this.mapGuestPaymentStatus(payload.paymentStatus),
+          paymentMethod: this.mapGuestPaymentMethod(payload.paymentMethod)
+        };
+      });
+
+      this.orderStatusByNumber.set(updates);
+
+      const anyActive = orderNumbers.some((orderNo) => {
+        const status = (updates[orderNo]?.status || '').toLowerCase();
+        return status !== 'delivered' && status !== 'rejected';
+      });
+
+      if (!anyActive && this.orderStatusPoller) {
+        clearInterval(this.orderStatusPoller);
+        this.orderStatusPoller = null;
+      }
+    } catch {
+      // Keep UI responsive even when polling fails intermittently.
+    }
+  }
+
+  private mapGuestOrderStatus(status: number | string): string {
+    if (typeof status === 'string') {
+      const normalized = status.trim().toLowerCase();
+      if (normalized === 'cancelled') {
+        return 'Rejected';
+      }
+      return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Accepted';
+    }
+
+    if (status === 1) return 'Accepted';
+    if (status === 2) return 'Preparing';
+    if (status === 3) return 'Ready';
+    if (status === 4) return 'Delivered';
+    if (status === 5) return 'Rejected';
+    return 'Accepted';
+  }
+
+  private mapGuestPaymentStatus(status: number | string): string {
+    if (typeof status === 'string') {
+      return status;
+    }
+    if (status === 1) return 'Pending';
+    if (status === 2) return 'Paid';
+    if (status === 3) return 'Failed';
+    if (status === 4) return 'Refunded';
+    return String(status);
+  }
+
+  private mapGuestPaymentMethod(method: number | string): string {
+    if (typeof method === 'string') {
+      return method;
+    }
+    if (method === 1) return 'COD';
+    return String(method);
+  }
+
+  private persistTrackedOrderNumbers(hotelCode: string, orderNumbers: string[]): void {
+    if (typeof window === 'undefined' || !hotelCode) {
+      return;
+    }
+
+    sessionStorage.setItem(this.trackedOrdersStorageKeyPrefix + hotelCode.toLowerCase(), JSON.stringify(orderNumbers));
+  }
+
+  private loadTrackedOrderNumbers(hotelCode: string): string[] {
+    if (typeof window === 'undefined' || !hotelCode) {
+      return [];
+    }
+
+    const raw = sessionStorage.getItem(this.trackedOrdersStorageKeyPrefix + hotelCode.toLowerCase());
+    if (!raw) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      return parsed.filter((value) => typeof value === 'string' && value.trim().length > 0) as string[];
+    } catch {
+      return [];
+    }
+  }
   private startTimer(endTime: number): void {
     if (this.timer) {
       clearInterval(this.timer);
@@ -563,5 +827,33 @@ export class GuestOrderComponent implements OnDestroy {
     this.timer = setInterval(tick, 1000);
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

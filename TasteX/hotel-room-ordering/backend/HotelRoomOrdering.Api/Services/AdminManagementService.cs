@@ -312,6 +312,7 @@ public sealed class AdminManagementService(OrderingDbContext db, IClock clock, I
             return new AdminMenuCategoryDto(
                 category.CategoryId,
                 category.Name,
+                category.CategoryIcon,
                 category.SortOrder,
                 categoryItems);
         }).ToList();
@@ -467,6 +468,7 @@ public sealed class AdminManagementService(OrderingDbContext db, IClock clock, I
             CategoryCode = BuildCode("CAT", name, now),
             Name = name,
             SortOrder = request.SortOrder,
+            CategoryIcon = string.IsNullOrWhiteSpace(request.CategoryIcon) ? null : request.CategoryIcon.Trim(),
             IsActive = request.IsActive,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -475,7 +477,7 @@ public sealed class AdminManagementService(OrderingDbContext db, IClock clock, I
         db.Categories.Add(category);
         await db.SaveChangesAsync(cancellationToken);
 
-        return new ApiResponse<AdminMenuCategoryDto>(true, new AdminMenuCategoryDto(category.CategoryId, category.Name, category.SortOrder, Array.Empty<AdminMenuItemDto>()), null);
+        return new ApiResponse<AdminMenuCategoryDto>(true, new AdminMenuCategoryDto(category.CategoryId, category.Name, category.CategoryIcon, category.SortOrder, Array.Empty<AdminMenuItemDto>()), null);
     }
 
     public async Task<ApiResponse<AdminMenuCategoryDto>> UpdateCategoryAsync(long categoryId, UpsertCategoryRequest request, CancellationToken cancellationToken = default)
@@ -505,11 +507,12 @@ public sealed class AdminManagementService(OrderingDbContext db, IClock clock, I
 
         category.Name = name;
         category.SortOrder = request.SortOrder;
+        category.CategoryIcon = string.IsNullOrWhiteSpace(request.CategoryIcon) ? null : request.CategoryIcon.Trim();
         category.IsActive = request.IsActive;
         category.UpdatedAtUtc = clock.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
-        return new ApiResponse<AdminMenuCategoryDto>(true, new AdminMenuCategoryDto(category.CategoryId, category.Name, category.SortOrder, Array.Empty<AdminMenuItemDto>()), null);
+        return new ApiResponse<AdminMenuCategoryDto>(true, new AdminMenuCategoryDto(category.CategoryId, category.Name, category.CategoryIcon, category.SortOrder, Array.Empty<AdminMenuItemDto>()), null);
     }
 
     public async Task<ApiResponse<bool>> DeleteCategoryAsync(long categoryId, CancellationToken cancellationToken = default)
@@ -819,6 +822,7 @@ public sealed class AdminManagementService(OrderingDbContext db, IClock clock, I
             .Select(category => new AdminMenuCategoryDto(
                 category.CategoryId,
                 category.Name,
+                category.CategoryIcon,
                 category.SortOrder,
                 itemsByCategory.TryGetValue(category.CategoryId, out var items)
                     ? items
@@ -961,8 +965,4 @@ public sealed class AdminManagementService(OrderingDbContext db, IClock clock, I
         return $"{prefix}-{clean}-{utcNow:HHmmss}";
     }
 }
-
-
-
-
 

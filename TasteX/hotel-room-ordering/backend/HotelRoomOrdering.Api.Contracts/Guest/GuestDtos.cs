@@ -31,6 +31,7 @@ public sealed record CartLineRequest(
 public sealed record CheckoutRequest(
     string GuestSessionToken,
     string HotelCode,
+    string? RoomNumber,
     string CurrencyCode,
     PaymentMethod PaymentMethod,
     IReadOnlyList<CartLineRequest> Lines,
@@ -67,3 +68,4 @@ public sealed record OrderStatusResponse(
     int ServiceTimeMinutes,
     decimal TotalAmount,
     string CurrencyCode);
+

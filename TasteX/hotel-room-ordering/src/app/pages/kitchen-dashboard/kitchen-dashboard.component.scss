@@ -436,11 +436,12 @@
     width: min(320px, calc(100vw - 1.1rem));
   }
 
-  .kd-header,
+   .kd-header,
   .metrics-grid,
   .filters-card,
   .orders-list,
-  .inventory-card {
+  .inventory-card,
+  .billing-card {
     margin-left: 0.7rem;
     margin-right: 0.7rem;
   }
@@ -477,7 +478,8 @@
 
   .metrics-grid,
   .inventory-grid,
-  .decision-row {
+  .decision-row,
+  .billing-row {
     grid-template-columns: 1fr;
   }
 }
@@ -748,3 +750,137 @@
   border-color: #2f80ff;
   box-shadow: 0 0 0 3px rgba(47, 128, 255, 0.14);
 }
+
+.billing-card {
+  margin: 1rem 1.25rem 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.billing-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.billing-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #0f172a;
+}
+
+.billing-head p {
+  margin: 0.25rem 0 0;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.auto-print-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #334155;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.billing-list {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.billing-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.85rem;
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.billing-info {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.billing-info strong {
+  color: #0f172a;
+  font-size: 0.98rem;
+}
+
+.billing-info span,
+.billing-info small {
+  color: #64748b;
+  font-size: 0.86rem;
+}
+
+.billing-actions {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: end;
+}
+
+.billing-actions small {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.btn-kot {
+  min-height: 2.15rem;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 0.65rem;
+  padding: 0 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.billing-empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+
+.panel-toggle-content {
+  min-width: 0;
+}
+
+.panel-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.icon-toggle {
+  height: 2rem;
+  width: 2rem;
+  border: 1px solid #d7dce3;
+  background: #fff;
+  color: #64748b;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.icon-toggle .pi {
+  font-size: 0.82rem;
+}
+
+.inventory-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem;
+  cursor: pointer;
+}
+

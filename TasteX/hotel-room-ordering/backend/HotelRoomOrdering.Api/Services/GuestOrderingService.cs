@@ -60,6 +60,7 @@ public sealed class GuestOrderingService(
             .Select(c => new MenuCategoryDto(
                 c.CategoryId,
                 c.Name,
+                c.CategoryIcon,
                 c.SortOrder,
                 hotelMenuItems
                     .Where(hmi => hmi.Item.CategoryId == c.CategoryId
@@ -79,7 +80,8 @@ public sealed class GuestOrderingService(
                             hmi.Item.Description,
                             effective?.EffectivePrice ?? hmi.Item.BasePrice,
                             hmi.Item.IsVeg,
-                            isAvailable);
+                            isAvailable,
+                            hmi.ImageUrl);
                     })
                     .ToList()))
             .ToList();
@@ -90,6 +92,8 @@ public sealed class GuestOrderingService(
             hotel.Name,
             hotel.CityId,
             hotel.City.Name,
+            hotel.City.StateName,
+            hotel.AddressLine,
             hotel.KitchenId,
             hotel.Kitchen.Name,
             categoryDtos);
@@ -295,6 +299,7 @@ public sealed class GuestOrderingService(
             HotelId = hotel.HotelId,
             KitchenId = hotel.KitchenId,
             MobileNumber = guestSession.MobileNumber,
+            RoomNumber = string.IsNullOrWhiteSpace(request.RoomNumber) ? null : request.RoomNumber.Trim(),
             CurrencyCode = request.CurrencyCode,
             PaymentMethod = PaymentMethod.Cod,
             SubTotalAmount = subtotal,
@@ -355,6 +360,13 @@ public sealed class GuestOrderingService(
         return new ApiResponse<OrderStatusResponse>(true, response, null);
     }
 }
+
+
+
+
+
+
+
 
 
 

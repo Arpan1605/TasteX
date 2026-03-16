@@ -15,8 +15,10 @@ import {
   UpsertHotelMenuItemRequest,
   UpsertKitchenRequest
 } from '../../services/admin-api.service';
+import { KitchenApiService, KitchenOrderDto } from '../../services/kitchen-api.service';
 import { MockStoreService } from '../../services/mock-store.service';
 import { hashMockPassword } from '../../utils/mock-password';
+import { PaymentStatus } from '../../models/domain.models';
 
 type StatusKey = 'Accepted' | 'Preparing' | 'Ready' | 'Delivered' | 'Rejected';
 type AdminSection = 'Overview' | 'Cities' | 'Kitchens' | 'Hotels' | 'Menu' | 'QR Codes' | 'Reports';
@@ -81,9 +83,12 @@ type MenuItemCard = {
 type MenuCategoryCard = {
   categoryId: number;
   categoryName: string;
+  categoryIcon: string;
   sortOrder: number;
   items: MenuItemCard[];
 };
+
+type DashboardOrderRow = ReturnType<MockStoreService['getDashboardOrders']>[number];
 
 @Component({
   selector: 'app-admin-dashboard',
@@ -95,6 +100,7 @@ type MenuCategoryCard = {
 export class AdminDashboardComponent implements OnDestroy {
   private readonly store = inject(MockStoreService);
   private readonly adminApi = inject(AdminApiService);
+  private readonly kitchenApi = inject(KitchenApiService);
   private readonly router = inject(Router);
 
   selectedSection = signal<AdminSection>('Overview');
@@ -136,6 +142,7 @@ export class AdminDashboardComponent implements OnDestroy {
   editingCategoryId = signal<number | null>(null);
   categoryNameInput = signal('');
   categorySortInput = signal('1');
+  categoryIconInput = signal('');
   categoryFormError = signal('');
 
   itemNameInput = signal('');
@@ -166,6 +173,8 @@ export class AdminDashboardComponent implements OnDestroy {
   hotelCards = signal<HotelCard[]>([]);
   menuCategories = signal<MenuCategoryCard[]>([]);
   selectedMenuHotelId = signal<number | null>(null);
+  backendDashboardRows = signal<DashboardOrderRow[]>([]);
+  dashboardApiLoaded = signal(false);
   unreadNew = signal(0);
   highlightNew = signal(false);
   adminNotificationsOpen = signal(false);
@@ -175,6 +184,7 @@ export class AdminDashboardComponent implements OnDestroy {
   private readonly knownOrderIds = new Set<number>();
   private readonly pulseTimers = new Set<ReturnType<typeof setTimeout>>();
   private readonly kitchenProfilesStorageKey = 'tx_kitchen_profiles_v1';
+  private readonly dashboardPollTimer: ReturnType<typeof setInterval> | null;
   private toastId = 0;
 
   private citiesLoaded = false;
@@ -195,7 +205,7 @@ export class AdminDashboardComponent implements OnDestroy {
     { label: 'Reports', icon: 'pi pi-chart-line' }
   ];
 
-  readonly dashboardRows = computed(() => this.store.getDashboardOrders());
+  readonly dashboardRows = computed(() => this.dashboardApiLoaded() ? this.backendDashboardRows() : this.store.getDashboardOrders());
   readonly totalRevenue = computed(() => this.dashboardRows().reduce((sum, row) => sum + row.totalAmount, 0));
   readonly totalOrders = computed(() => this.dashboardRows().length);
   readonly deliveredOrders = computed(() => this.dashboardRows().filter((row) => row.status === 'Delivered').length);
@@ -601,6 +611,10 @@ export class AdminDashboardComponent implements OnDestroy {
     this.selectedMenuHotelId.set(null);
     this.menuCategories.set([]);
 
+    this.dashboardPollTimer = typeof window !== 'undefined'
+      ? setInterval(() => { void this.loadDashboardOrdersFromApi(); }, 10000)
+      : null;
+
     effect(() => {
       const rows = this.dashboardRows();
 
@@ -625,11 +639,15 @@ export class AdminDashboardComponent implements OnDestroy {
     void this.loadCitiesFromApi();
     void this.loadKitchensFromApi();
     void this.loadHotelsFromApi();
+    void this.loadDashboardOrdersFromApi();
   }
 
   ngOnDestroy(): void {
     this.pulseTimers.forEach((timer) => clearTimeout(timer));
     this.pulseTimers.clear();
+    if (this.dashboardPollTimer) {
+      clearInterval(this.dashboardPollTimer);
+    }
   }
 
   selectSection(section: AdminSection): void {
@@ -691,12 +709,116 @@ export class AdminDashboardComponent implements OnDestroy {
     return row.status === 'Accepted' && row.createdAt === row.updatedAt && (Date.now() - created) <= 10 * 60 * 1000;
   }
 
-  private pushAdminToast(row: ReturnType<MockStoreService['getDashboardOrders']>[number]): void {
-    const room = row.roomNumber ? ` � Room ${row.roomNumber}` : '';
+  private pushAdminToast(row: DashboardOrderRow): void {
+    const room = row.roomNumber ? ' - Room ' + row.roomNumber : '';
     const id = ++this.toastId;
-    this.notificationToasts.update((items) => [{ id, orderId: row.id, message: `${row.orderNo} � ${row.hotelName}${room}`, createdAt: row.createdAt }, ...items].slice(0, 12));
+    this.notificationToasts.update((items) => [{ id, orderId: row.id, message: row.orderNo + ' - ' + row.hotelName + room, createdAt: row.createdAt }, ...items].slice(0, 12));
+  }
+  private async loadDashboardOrdersFromApi(): Promise<void> {
+    const kitchenIds = this.kitchenCards().map((entry) => entry.kitchenId).filter((id) => Number.isFinite(id) && id > 0);
+    if (kitchenIds.length === 0) {
+      if (this.kitchensLoaded) {
+        if (!this.dashboardApiLoaded()) {
+          this.knownOrderIds.clear();
+        }
+        this.backendDashboardRows.set([]);
+        this.dashboardApiLoaded.set(true);
+      }
+      return;
+    }
+
+    try {
+      const responses = await Promise.all(
+        kitchenIds.map(async (kitchenId) => {
+          const response = await firstValueFrom(this.kitchenApi.getOrders({ kitchenId, pageNumber: 1, pageSize: 200 }));
+          return { kitchenId, response };
+        })
+      );
+
+      const nextRows = responses
+        .flatMap((entry) => {
+          const orders = entry.response.success && entry.response.data?.orders ? entry.response.data.orders : [];
+          return orders.map((order) => this.mapKitchenOrderToDashboardRow(order, entry.kitchenId));
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      if (!this.dashboardApiLoaded()) {
+        this.knownOrderIds.clear();
+      }
+      this.backendDashboardRows.set(nextRows);
+      this.dashboardApiLoaded.set(true);
+    } catch {
+      // Keep current dashboard snapshot on transient API failures.
+    }
   }
 
+  private mapKitchenOrderToDashboardRow(order: KitchenOrderDto, kitchenId: number): DashboardOrderRow {
+    return {
+      id: order.orderId,
+      orderNo: order.orderNumber,
+      hotelId: order.hotelId,
+      hotelName: order.hotelName,
+      kitchenId,
+      mobile: order.maskedMobileNumber,
+      roomNumber: (order.roomNumber ?? '').trim() || undefined,
+      lines: (order.lines ?? []).map((line) => ({
+        itemId: line.itemId,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice
+      })),
+      totalAmount: order.totalAmount,
+      paymentMethod: this.mapKitchenPaymentMethod(order.paymentMethod),
+      paymentStatus: this.mapKitchenPaymentStatus(order.paymentStatus),
+      status: this.mapKitchenOrderStatus(order.orderStatus),
+      createdAt: order.createdAtUtc,
+      updatedAt: order.updatedAtUtc,
+      serviceTimeMins: order.serviceTimeMinutes,
+      acceptedAt: undefined,
+      preparingStartedAt: undefined,
+      readyAt: undefined,
+      deliveredAt: undefined,
+      rejectedAt: undefined,
+      rejectionReason: undefined
+    };
+  }
+
+  private mapKitchenOrderStatus(status: number | string): StatusKey {
+    if (typeof status === 'string') {
+      const normalized = status.trim().toLowerCase();
+      if (normalized === 'preparing') return 'Preparing';
+      if (normalized === 'ready') return 'Ready';
+      if (normalized === 'delivered') return 'Delivered';
+      if (normalized === 'cancelled' || normalized === 'rejected') return 'Rejected';
+      return 'Accepted';
+    }
+
+    switch (status) {
+      case 2: return 'Preparing';
+      case 3: return 'Ready';
+      case 4: return 'Delivered';
+      case 5: return 'Rejected';
+      default: return 'Accepted';
+    }
+  }
+
+  private mapKitchenPaymentMethod(_method: number | string): 'COD' {
+    return 'COD';
+  }
+
+  private mapKitchenPaymentStatus(status: number | string): PaymentStatus {
+    if (typeof status === 'string') {
+      const normalized = status.trim().toLowerCase();
+      if (normalized === 'paid') return 'Paid';
+      if (normalized === 'failed') return 'Failed';
+      return 'Pending';
+    }
+
+    switch (status) {
+      case 2: return 'Paid';
+      case 3: return 'Failed';
+      default: return 'Pending';
+    }
+  }
   openAddCityModal(): void {
     this.showAddCityModal.set(true);
     this.editingCityId.set(null);
@@ -1032,6 +1154,7 @@ export class AdminDashboardComponent implements OnDestroy {
     this.categoryNameInput.set('');
     const nextSort = Math.max(1, ...this.menuCategories().map((x) => x.sortOrder)) + 1;
     this.categorySortInput.set(String(nextSort));
+    this.categoryIconInput.set('');
     this.categoryFormError.set('');
     this.showCategoryModal.set(true);
   }
@@ -1042,6 +1165,7 @@ export class AdminDashboardComponent implements OnDestroy {
     this.editingCategoryId.set(category.categoryId);
     this.categoryNameInput.set(category.categoryName);
     this.categorySortInput.set(String(category.sortOrder));
+    this.categoryIconInput.set(category.categoryIcon || '');
     this.categoryFormError.set('');
     this.showCategoryModal.set(true);
   }
@@ -1049,12 +1173,14 @@ export class AdminDashboardComponent implements OnDestroy {
   closeCategoryModal(): void {
     this.showCategoryModal.set(false);
     this.editingCategoryId.set(null);
+    this.categoryIconInput.set('');
     this.categoryFormError.set('');
   }
 
   async saveCategory(): Promise<void> {
     const name = this.categoryNameInput().trim();
     const sortOrder = Number(this.categorySortInput());
+    const categoryIcon = this.categoryIconInput().trim();
     const selectedHotelId = this.selectedMenuHotelId();
     if (!name) {
       this.categoryFormError.set('Category name is required.');
@@ -1076,7 +1202,12 @@ export class AdminDashboardComponent implements OnDestroy {
       return;
     }
 
-    const payload: UpsertCategoryRequest = { name, sortOrder, isActive: true };
+    const payload: UpsertCategoryRequest = {
+      name,
+      categoryIcon: categoryIcon || undefined,
+      sortOrder,
+      isActive: true
+    };
     try {
       const response = editingId
         ? await firstValueFrom(this.adminApi.updateCategory(editingId, payload))
@@ -1342,13 +1473,21 @@ export class AdminDashboardComponent implements OnDestroy {
 
   orderStatusClass(status: string): string { return status.toLowerCase(); }
 
-  menuCategoryIcon(categoryName: string): string {
-    const lower = categoryName.toLowerCase();
-    if (lower.includes('breakfast')) return 'pi pi-sun';
-    if (lower.includes('main')) return 'pi pi-star';
-    if (lower.includes('snack')) return 'pi pi-box';
-    if (lower.includes('bev')) return 'pi pi-glass';
-    return 'pi pi-sparkles';
+  isCategoryIconImage(icon: string): boolean {
+    return /^(https?:\/\/|data:image\/)/i.test((icon || '').trim());
+  }
+
+  categoryDisplayIcon(category: MenuCategoryCard): string {
+    const direct = (category.categoryIcon || '').trim();
+    if (direct && !this.isCategoryIconImage(direct)) return direct;
+
+    const lower = category.categoryName.toLowerCase();
+    if (lower.includes('breakfast')) return '\u{1F373}';
+    if (lower.includes('main')) return '\u{1F35B}';
+    if (lower.includes('snack')) return '\u{1F35F}';
+    if (lower.includes('bev')) return '\u{1F964}';
+    if (lower.includes('shake')) return '\u{1F964}';
+    return '\u{1F37D}\uFE0F';
   }
   private async loadCitiesFromApi(): Promise<void> {
     try {
@@ -1364,11 +1503,14 @@ export class AdminDashboardComponent implements OnDestroy {
   private async loadKitchensFromApi(): Promise<void> {
     try {
       const response = await firstValueFrom(this.adminApi.getKitchens());
-      if (response.success && Array.isArray(response.data)) this.kitchenCards.set(this.applyKitchenProfiles(response.data.map((entry) => this.mapKitchenDtoToCard(entry))));
+      if (response.success && Array.isArray(response.data)) {
+        this.kitchenCards.set(this.applyKitchenProfiles(response.data.map((entry) => this.mapKitchenDtoToCard(entry))));
+      }
     } catch {
       // use fallback
     } finally {
       this.kitchensLoaded = true;
+      void this.loadDashboardOrdersFromApi();
     }
   }
 
@@ -1542,6 +1684,7 @@ export class AdminDashboardComponent implements OnDestroy {
     return {
       categoryId: dto.categoryId,
       categoryName: dto.categoryName,
+      categoryIcon: dto.categoryIcon ?? '',
       sortOrder: dto.sortOrder,
       items: (dto.items ?? []).map((item) => ({
         itemId: item.itemId,
@@ -1611,80 +1754,4 @@ export class AdminDashboardComponent implements OnDestroy {
     });
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
