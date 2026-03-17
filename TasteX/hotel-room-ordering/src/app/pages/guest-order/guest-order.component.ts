@@ -1,4 +1,4 @@
-﻿import { CommonModule } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -71,6 +71,7 @@ export class GuestOrderComponent implements OnDestroy {
   showCart = signal(false);
   showPayment = signal(false);
   showOrderPlaced = signal(false);
+  activeGuestTab = signal<'menu' | 'status'>('menu');
   collapsedCategories = signal<Set<number>>(new Set());
 
   private readonly hotelCode = signal('');
@@ -94,6 +95,7 @@ export class GuestOrderComponent implements OnDestroy {
   readonly payableTotal = computed(() => this.cartTotal() + this.gstAmount());
   readonly selectedPreference = computed(() => this.selectedPreferenceState());
   readonly showMenu = computed(() => this.verified());
+  readonly showStatusTab = computed(() => this.verified() && this.trackedOrders().length > 0);
   readonly trackedOrders = computed(() => {
     const numbers = this.trackedOrderNumbers();
     const lookup = this.orderStatusByNumber();
@@ -190,6 +192,7 @@ export class GuestOrderComponent implements OnDestroy {
     if (this.trackedOrderNumbers().length > 0) {
       void this.refreshTrackedOrderStatuses();
       this.startOrderStatusPolling();
+      this.activeGuestTab.set('status');
     }
     void this.loadHotelMenu();
   }
@@ -203,6 +206,14 @@ export class GuestOrderComponent implements OnDestroy {
     }
     if (this.orderStatusPoller) {
       clearInterval(this.orderStatusPoller);
+    }
+  }
+
+  switchGuestTab(tab: 'menu' | 'status'): void {
+    this.activeGuestTab.set(tab);
+    if (tab === 'status') {
+      this.showCart.set(false);
+      this.showPayment.set(false);
     }
   }
 
@@ -482,7 +493,9 @@ export class GuestOrderComponent implements OnDestroy {
       this.expandedTrackedOrders.set(new Set([checkoutData.orderNumber]));
       void this.refreshTrackedOrderStatuses();
       this.startOrderStatusPolling();
+      this.activeGuestTab.set('status');
       this.showOrderPlaced.set(true);
+      this.activeGuestTab.set('status');
       this.showPayment.set(false);
       this.showCart.set(false);
       this.cartLines.set([]);
@@ -689,7 +702,7 @@ export class GuestOrderComponent implements OnDestroy {
 
     this.orderStatusPoller = setInterval(() => {
       void this.refreshTrackedOrderStatuses();
-    }, 8000);
+    }, 4000);
   }
 
   private async refreshTrackedOrderStatuses(): Promise<void> {
@@ -732,9 +745,9 @@ export class GuestOrderComponent implements OnDestroy {
 
       const anyActive = orderNumbers.some((orderNo) => {
         const status = (updates[orderNo]?.status || '').toLowerCase();
-        return status !== 'delivered' && status !== 'rejected';
+        const payment = (updates[orderNo]?.paymentStatus || '').toLowerCase();
+        return status !== 'delivered' && status !== 'rejected' || payment !== 'paid';
       });
-
       if (!anyActive && this.orderStatusPoller) {
         clearInterval(this.orderStatusPoller);
         this.orderStatusPoller = null;
@@ -827,6 +840,16 @@ export class GuestOrderComponent implements OnDestroy {
     this.timer = setInterval(tick, 1000);
   }
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

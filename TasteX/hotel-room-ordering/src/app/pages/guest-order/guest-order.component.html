@@ -90,8 +90,11 @@
       <div class="app-strip">
         <span>QR Hotel Ordering System</span>
         <i class="pi pi-chevron-down"></i>
+      </div>      <div class="guest-tabs">
+        <button type="button" class="guest-tab" [class.active]="activeGuestTab() === 'menu'" (click)="switchGuestTab('menu')">Menu</button>
+        <button type="button" class="guest-tab" [class.active]="activeGuestTab() === 'status'" [disabled]="!showStatusTab()" (click)="switchGuestTab('status')">Order Status</button>
       </div>
-      @if (trackedOrders().length > 0) {
+      @if (trackedOrders().length > 0 && activeGuestTab() === 'status') {
         <section class="order-status-panel">
           <button type="button" class="order-status-toggle" (click)="toggleOrderStatusPanel()">
             <div>
@@ -166,7 +169,7 @@
             <p>Your COD order has been placed successfully.</p>
           </article>
         </section>
-      } @else if (!showCart()) {
+      } @else if (!showCart() && activeGuestTab() === 'menu') {
         <section class="menu-top">
           <div class="title-wrap">
             <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back"></button>
@@ -379,6 +382,7 @@
     }
   }
 </div>
+
 
 
 

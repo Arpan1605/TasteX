@@ -67,3 +67,17 @@ public sealed record UpdateOrderStatusResponse(
     OrderStatus CurrentStatus,
     DateTimeOffset UpdatedAtUtc);
 
+
+public sealed record UpdatePaymentStatusRequest(
+    long OrderId,
+    PaymentStatus NewStatus,
+    string UpdatedBy,
+    string? Notes);
+
+public sealed record UpdatePaymentStatusResponse(
+    long OrderId,
+    string OrderNumber,
+    PaymentStatus PreviousStatus,
+    PaymentStatus CurrentStatus,
+    DateTimeOffset UpdatedAtUtc);
+

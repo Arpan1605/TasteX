@@ -1,4 +1,4 @@
-using HotelRoomOrdering.Api.Contracts.Common;
+﻿using HotelRoomOrdering.Api.Contracts.Common;
 using HotelRoomOrdering.Api.Contracts.Contracts;
 using HotelRoomOrdering.Api.Contracts.Enums;
 using HotelRoomOrdering.Api.Contracts.Kitchen;
@@ -222,6 +222,45 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
             null);
     }
 
+    public async Task<ApiResponse<UpdatePaymentStatusResponse>> UpdatePaymentStatusAsync(UpdatePaymentStatusRequest request, CancellationToken cancellationToken = default)
+    {
+        var order = await db.Orders
+            .AsNoTracking()
+            .Where(o => o.OrderId == request.OrderId)
+            .Select(o => new { o.OrderId, o.OrderNumber, o.PaymentMethod, o.PaymentStatus })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (order is null)
+        {
+            return new ApiResponse<UpdatePaymentStatusResponse>(false, null, new ApiError("ORDER_NOT_FOUND", "Order not found."));
+        }
+
+        if (order.PaymentMethod != PaymentMethod.Cod)
+        {
+            return new ApiResponse<UpdatePaymentStatusResponse>(false, null, new ApiError("PAYMENT_METHOD_NOT_COD", "Only COD payments can be marked as received from kitchen."));
+        }
+
+        if (request.NewStatus != PaymentStatus.Paid)
+        {
+            return new ApiResponse<UpdatePaymentStatusResponse>(false, null, new ApiError("PAYMENT_STATUS_INVALID", "Only 'Paid' status is supported for COD received."));
+        }
+
+        var previous = order.PaymentStatus;
+        var now = clock.UtcNow;
+
+        if (previous != PaymentStatus.Paid)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE dbo.Orders SET PaymentStatus = {0}, UpdatedAtUtc = SYSUTCDATETIME() WHERE OrderId = {1};",
+                [(byte)request.NewStatus, request.OrderId],
+                cancellationToken);
+        }
+
+        return new ApiResponse<UpdatePaymentStatusResponse>(
+            true,
+            new UpdatePaymentStatusResponse(order.OrderId, order.OrderNumber, previous, request.NewStatus, new DateTimeOffset(now, TimeSpan.Zero)),
+            null);
+    }
     private static string MaskMobile(string mobile)
     {
         if (string.IsNullOrWhiteSpace(mobile) || mobile.Length < 6)
@@ -232,6 +271,8 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
         return $"{mobile[..2]}******{mobile[^2..]}";
     }
 }
+
+
 
 
 

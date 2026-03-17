@@ -1001,6 +1001,89 @@ export class KitchenDashboardComponent implements OnDestroy {
       }
     }
   }
+  private async updatePaymentStatus(orderId: number, status: string, notes?: string): Promise<boolean> {
+    const kitchenId = this.selectedKitchenId();
+    if (!kitchenId) {
+      this.actionMessage.set('Select a kitchen first.');
+      return false;
+    }
+
+    const stringRequest = {
+      orderId,
+      newStatus: status,
+      updatedBy: this.activeSession()?.loginUsername || this.kitchenTitle(),
+      notes
+    };
+
+    const normalized = status.trim().toLowerCase();
+    const numericStatus = normalized === 'paid'
+      ? 2
+      : normalized === 'failed'
+        ? 3
+        : normalized === 'refunded'
+          ? 4
+          : 1;
+
+    const numericRequest = {
+      orderId,
+      newStatus: numericStatus,
+      updatedBy: this.activeSession()?.loginUsername || this.kitchenTitle(),
+      notes
+    };
+
+    const applySuccess = async (): Promise<boolean> => {
+      this.actionMessage.set('Payment status updated.');
+      const clearTimer = setTimeout(() => this.actionMessage.set(''), 3000);
+      this.pulseTimers.add(clearTimer);
+      await this.loadOrdersFromApi();
+      return true;
+    };
+
+    try {
+      const response = await firstValueFrom(this.kitchenApi.updatePaymentStatus(orderId, stringRequest));
+      if (response.success) {
+        return await applySuccess();
+      }
+
+      const fallback = await firstValueFrom(this.kitchenApi.updatePaymentStatus(orderId, numericRequest));
+      if (fallback.success) {
+        return await applySuccess();
+      }
+
+      const apiError = fallback.errors && fallback.errors.length > 0 ? fallback.errors[0] : null;
+      this.actionMessage.set(apiError || fallback.message || 'Unable to update payment status right now.');
+      const clearTimer = setTimeout(() => this.actionMessage.set(''), 4000);
+      this.pulseTimers.add(clearTimer);
+      return false;
+    } catch (error) {
+      try {
+        const fallback = await firstValueFrom(this.kitchenApi.updatePaymentStatus(orderId, numericRequest));
+        if (fallback.success) {
+          return await applySuccess();
+        }
+
+        const apiError = fallback.errors && fallback.errors.length > 0 ? fallback.errors[0] : null;
+        this.actionMessage.set(apiError || fallback.message || 'Unable to update payment status right now.');
+        const clearTimer = setTimeout(() => this.actionMessage.set(''), 4000);
+        this.pulseTimers.add(clearTimer);
+        return false;
+      } catch (fallbackError) {
+        const httpError = fallbackError instanceof HttpErrorResponse
+          ? fallbackError
+          : (error instanceof HttpErrorResponse ? error : null);
+
+        this.actionMessage.set(httpError?.error?.error?.message || httpError?.error?.message || 'Payment update failed. Check API connection.');
+        const clearTimer = setTimeout(() => this.actionMessage.set(''), 4000);
+        this.pulseTimers.add(clearTimer);
+        return false;
+      }
+    }
+  }
+
+  markCodPaid(orderId: number): void {
+    void this.updatePaymentStatus(orderId, 'Paid');
+  }
+
   private normalizeMobileNumber(rawValue: unknown, fallbackValue: unknown): string {
     const raw = typeof rawValue === 'string' ? rawValue.trim() : '';
     if (raw) return raw;
@@ -1173,6 +1256,10 @@ export class KitchenDashboardComponent implements OnDestroy {
     }
   }
 }
+
+
+
+
 
 
 

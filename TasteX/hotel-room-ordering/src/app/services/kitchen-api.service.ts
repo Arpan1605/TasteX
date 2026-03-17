@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+﻿import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../config/api-base-url';
@@ -83,6 +83,21 @@ export interface UpdateOrderStatusResponse {
   updatedAtUtc: string;
 }
 
+export interface UpdatePaymentStatusRequest {
+  orderId: number;
+  newStatus: number | string;
+  updatedBy: string;
+  notes?: string;
+}
+
+export interface UpdatePaymentStatusResponse {
+  orderId: number;
+  orderNumber: string;
+  previousStatus: number | string;
+  currentStatus: number | string;
+  updatedAtUtc: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class KitchenApiService {
   private readonly http = inject(HttpClient);
@@ -115,7 +130,14 @@ export class KitchenApiService {
   updateOrderStatus(orderId: number, request: UpdateOrderStatusRequest): Observable<ApiResponse<UpdateOrderStatusResponse>> {
     return this.http.patch<ApiResponse<UpdateOrderStatusResponse>>(`${this.baseUrl}/orders/${orderId}/status`, request);
   }
+  updatePaymentStatus(orderId: number, request: UpdatePaymentStatusRequest): Observable<ApiResponse<UpdatePaymentStatusResponse>> {
+    return this.http.patch<ApiResponse<UpdatePaymentStatusResponse>>(`${this.baseUrl}/orders/${orderId}/payment`, request);
+  }
+
 }
+
+
+
 
 
 

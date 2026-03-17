@@ -225,6 +225,13 @@
                   <p class="placed-at">Accepted: {{ placedTime(row.acceptedAt || row.createdAt) }}</p>
                 }
 
+                <p class="placed-at">Payment: {{ row.paymentMethod }} • {{ row.paymentStatus }}</p>
+                @if (row.paymentMethod === 'COD' && row.paymentStatus !== 'Paid') {
+                  <div class="decision-row one">
+                    <button type="button" class="btn-pay" (click)="$event.stopPropagation(); markCodPaid(row.id)">Mark COD Received</button>
+                  </div>
+                }
+
                 @if (statusClass(row) === 'accepted') {
                   <div class="decision-row">
                     <button type="button" class="btn-start" (click)="$event.stopPropagation(); startPreparing(row.id)">Start Preparing</button>
@@ -290,6 +297,7 @@
     </section>
   }
 </div>
+
 
 
 
