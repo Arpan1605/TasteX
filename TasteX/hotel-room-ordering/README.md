@@ -1,59 +1,136 @@
-# HotelRoomOrdering
+# Hotel Room Ordering System
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.0.
+Full‑stack QR hotel ordering system with:
+- **Guest portal** (QR scan → OTP → menu → order status)
+- **Kitchen dashboard** (live orders, status updates, COD received)
+- **Admin dashboard** (hotels, kitchens, menu, inventory)
 
-## Development server
+---
 
-To start a local development server, run:
+## Requirements (install on your machine)
 
-```bash
-ng serve
-```
+### Backend
+- **.NET SDK 8.x**
+- **SQL Server** (LocalDB, SQL Server Express, or full SQL Server)
+- **EF Core tools**
+  - `dotnet tool install --global dotnet-ef`
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+### Frontend
+- **Node.js 20+**
+- **npm 10+** (repo uses `npm@10.9.0`)
 
-## Code scaffolding
+---
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
+## 1) Clone the repo
 
 ```bash
-ng build
+git clone https://github.com/Arpan1605/TasteX.git
+cd TasteX/hotel-room-ordering
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+---
 
-## Running unit tests
+## 2) Database setup
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+### Option A: Use EF Core migrations (recommended)
+
+1. Make sure SQL Server is running.
+2. Update connection string in:
+   - `backend/HotelRoomOrdering.Api/appsettings.json`
+
+Example (LocalDB):
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Server=(localdb)\\MSSQLLocalDB;Database=HotelRoomOrdering;Trusted_Connection=True;TrustServerCertificate=True;"
+}
+```
+
+3. Run migrations:
+```bash
+dotnet ef database update --project backend/HotelRoomOrdering.Api/HotelRoomOrdering.Api.csproj --startup-project backend/HotelRoomOrdering.Api/HotelRoomOrdering.Api.csproj
+```
+
+### Option B: Run SQL schema directly
+
+Use `database/hotel-room-ordering.schema.sql` in SQL Server Management Studio to create tables manually.
+
+---
+
+## 3) Run the backend
 
 ```bash
-ng test
+dotnet restore backend/HotelRoomOrdering.Api/HotelRoomOrdering.Api.csproj
+dotnet run --project backend/HotelRoomOrdering.Api/HotelRoomOrdering.Api.csproj
 ```
 
-## Running end-to-end tests
+Backend will run at:
+```
+http://localhost:5187
+```
 
-For end-to-end (e2e) testing, run:
+Swagger:
+```
+http://localhost:5187/swagger
+```
+
+---
+
+## 4) Run the frontend
 
 ```bash
-ng e2e
+npm install
+npm start
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+Frontend runs at:
+```
+http://localhost:4200
+```
 
-## Additional Resources
+Proxy config (already set):
+```
+src/proxy.conf.json -> http://localhost:5187
+```
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+---
+
+## 5) Common troubleshooting
+
+### Backend cannot connect to DB
+- Ensure SQL Server is running
+- Verify connection string in `backend/HotelRoomOrdering.Api/appsettings.json`
+- Confirm DB exists and tables created (EF migrations or schema file)
+
+### `dotnet` not found
+- Install .NET SDK 8: https://dotnet.microsoft.com/download
+
+### `dotnet-ef` not found
+```bash
+dotnet tool install --global dotnet-ef
+```
+
+### Frontend 500 or API errors
+- Ensure backend is running on `http://localhost:5187`
+- Check proxy settings in `proxy.conf.json`
+
+---
+
+## Useful commands
+
+```bash
+# Backend
+dotnet build backend/HotelRoomOrdering.Api/HotelRoomOrdering.Api.csproj
+dotnet ef database update --project backend/HotelRoomOrdering.Api/HotelRoomOrdering.Api.csproj --startup-project backend/HotelRoomOrdering.Api/HotelRoomOrdering.Api.csproj
+
+# Frontend
+npm start
+npm run build
+```
+
+---
+
+## Notes
+
+- COD flow only (payments integrations currently disabled).
+- Kitchen dashboard order status updates and COD received are real‑time (polled).
+
