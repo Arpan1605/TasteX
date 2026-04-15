@@ -115,28 +115,23 @@ dotnet tool install --global dotnet-ef
 
 ### OTP SMS for UAT / Production
 
-The backend supports SMS OTP delivery through Twilio while keeping the UAT dummy OTP flow available.
+The backend supports SMS OTP delivery through MSG91 while keeping the UAT dummy OTP flow available.
 
 Configure these backend environment variables when you want actual SMS delivery:
 
 ```bash
 OtpDelivery__Enabled=true
-OtpDelivery__Provider=Twilio
+OtpDelivery__Provider=MSG91
 OtpDelivery__DefaultCountryCode=+91
-OtpDelivery__Twilio__AccountSid=<your-twilio-account-sid>
-OtpDelivery__Twilio__AuthToken=<your-twilio-auth-token>
-OtpDelivery__Twilio__MessagingServiceSid=<your-messaging-service-sid>
+OtpDelivery__Msg91__AuthKey=<your-msg91-auth-key>
+OtpDelivery__Msg91__TemplateId=<your-msg91-template-id>
 ```
 
 Optional:
 
 ```bash
-OtpDelivery__Twilio__FromNumber=<your-twilio-phone-number>
+OtpDelivery__Msg91__BaseUrl=https://control.msg91.com
 ```
-
-Use either:
-- `OtpDelivery__Twilio__MessagingServiceSid`, or
-- `OtpDelivery__Twilio__FromNumber`
 
 For UAT:
 - if SMS credentials are configured, the system sends the OTP SMS to the phone

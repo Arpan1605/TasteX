@@ -16,16 +16,14 @@ services:
       - key: OtpDelivery__Enabled
         value: false
       - key: OtpDelivery__Provider
-        value: Twilio
+        value: MSG91
       - key: OtpDelivery__DefaultCountryCode
         value: +91
-      - key: OtpDelivery__Twilio__AccountSid
+      - key: OtpDelivery__Msg91__AuthKey
         sync: false
-      - key: OtpDelivery__Twilio__AuthToken
+      - key: OtpDelivery__Msg91__TemplateId
         sync: false
-      - key: OtpDelivery__Twilio__MessagingServiceSid
-        sync: false
-      - key: OtpDelivery__Twilio__FromNumber
+      - key: OtpDelivery__Msg91__BaseUrl
         sync: false
       - key: Cors__AllowedOrigins__0
         value: https://tastex-web-uat.onrender.com
@@ -64,16 +62,14 @@ services:
       - key: OtpDelivery__Enabled
         value: false
       - key: OtpDelivery__Provider
-        value: Twilio
+        value: MSG91
       - key: OtpDelivery__DefaultCountryCode
         value: +91
-      - key: OtpDelivery__Twilio__AccountSid
+      - key: OtpDelivery__Msg91__AuthKey
         sync: false
-      - key: OtpDelivery__Twilio__AuthToken
+      - key: OtpDelivery__Msg91__TemplateId
         sync: false
-      - key: OtpDelivery__Twilio__MessagingServiceSid
-        sync: false
-      - key: OtpDelivery__Twilio__FromNumber
+      - key: OtpDelivery__Msg91__BaseUrl
         sync: false
       - key: Cors__AllowedOrigins__0
         value: https://tastex-web-prod.onrender.com
