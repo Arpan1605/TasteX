@@ -2,6 +2,7 @@ using HotelRoomOrdering.Api.Contracts.Contracts;
 using HotelRoomOrdering.Api.Data;
 using HotelRoomOrdering.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,7 +31,7 @@ builder.Services.AddDbContext<OrderingDbContext>(options =>
     var connectionString = builder.Configuration.GetConnectionString("OrderingDb")
         ?? throw new InvalidOperationException("Connection string 'OrderingDb' was not found.");
 
-    options.UseNpgsql(connectionString);
+    options.UseNpgsql(NormalizePostgresConnectionString(connectionString));
 });
 
 builder.Services.AddScoped<IClock, SystemClock>();
@@ -65,4 +66,33 @@ if (allowedOrigins.Length > 0)
 
 app.MapControllers();
 app.Run();
+
+static string NormalizePostgresConnectionString(string connectionString)
+{
+    if (!connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
+        !connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+    {
+        return connectionString;
+    }
+
+    var uri = new Uri(connectionString);
+    var userInfo = uri.UserInfo.Split(':', 2);
+    if (userInfo.Length != 2)
+    {
+        throw new InvalidOperationException("PostgreSQL connection URL is missing username or password.");
+    }
+
+    var builder = new NpgsqlConnectionStringBuilder
+    {
+        Host = uri.Host,
+        Port = uri.Port > 0 ? uri.Port : 5432,
+        Database = uri.AbsolutePath.Trim('/'),
+        Username = Uri.UnescapeDataString(userInfo[0]),
+        Password = Uri.UnescapeDataString(userInfo[1]),
+        SslMode = SslMode.Require,
+        TrustServerCertificate = true
+    };
+
+    return builder.ConnectionString;
+}
 
