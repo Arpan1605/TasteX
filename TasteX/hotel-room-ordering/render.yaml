@@ -13,6 +13,20 @@ services:
         value: http://0.0.0.0:$PORT
       - key: ConnectionStrings__OrderingDb
         sync: false
+      - key: OtpDelivery__Enabled
+        value: false
+      - key: OtpDelivery__Provider
+        value: Twilio
+      - key: OtpDelivery__DefaultCountryCode
+        value: +91
+      - key: OtpDelivery__Twilio__AccountSid
+        sync: false
+      - key: OtpDelivery__Twilio__AuthToken
+        sync: false
+      - key: OtpDelivery__Twilio__MessagingServiceSid
+        sync: false
+      - key: OtpDelivery__Twilio__FromNumber
+        sync: false
       - key: Cors__AllowedOrigins__0
         value: https://tastex-web-uat.onrender.com
       - key: AppUrls__GuestBaseUrl
@@ -46,6 +60,20 @@ services:
       - key: ASPNETCORE_URLS
         value: http://0.0.0.0:$PORT
       - key: ConnectionStrings__OrderingDb
+        sync: false
+      - key: OtpDelivery__Enabled
+        value: false
+      - key: OtpDelivery__Provider
+        value: Twilio
+      - key: OtpDelivery__DefaultCountryCode
+        value: +91
+      - key: OtpDelivery__Twilio__AccountSid
+        sync: false
+      - key: OtpDelivery__Twilio__AuthToken
+        sync: false
+      - key: OtpDelivery__Twilio__MessagingServiceSid
+        sync: false
+      - key: OtpDelivery__Twilio__FromNumber
         sync: false
       - key: Cors__AllowedOrigins__0
         value: https://tastex-web-prod.onrender.com

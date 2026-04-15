@@ -113,6 +113,39 @@ dotnet tool install --global dotnet-ef
 - Ensure backend is running on `http://localhost:5187`
 - Check proxy settings in `proxy.conf.json`
 
+### OTP SMS for UAT / Production
+
+The backend supports SMS OTP delivery through Twilio while keeping the UAT dummy OTP flow available.
+
+Configure these backend environment variables when you want actual SMS delivery:
+
+```bash
+OtpDelivery__Enabled=true
+OtpDelivery__Provider=Twilio
+OtpDelivery__DefaultCountryCode=+91
+OtpDelivery__Twilio__AccountSid=<your-twilio-account-sid>
+OtpDelivery__Twilio__AuthToken=<your-twilio-auth-token>
+OtpDelivery__Twilio__MessagingServiceSid=<your-messaging-service-sid>
+```
+
+Optional:
+
+```bash
+OtpDelivery__Twilio__FromNumber=<your-twilio-phone-number>
+```
+
+Use either:
+- `OtpDelivery__Twilio__MessagingServiceSid`, or
+- `OtpDelivery__Twilio__FromNumber`
+
+For UAT:
+- if SMS credentials are configured, the system sends the OTP SMS to the phone
+- the OTP code remains `123456` for easy testing
+
+For Production:
+- the system generates a random 6-digit OTP
+- if SMS delivery is not configured, OTP send will fail intentionally
+
 ---
 
 ## Useful commands

@@ -7,6 +7,7 @@ using HotelRoomOrdering.Api.Data;
 using HotelRoomOrdering.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace HotelRoomOrdering.Api.Services;
 
@@ -14,7 +15,9 @@ public sealed class GuestOrderingService(
     OrderingDbContext db,
     IClock clock,
     IHashService hashService,
-    IHostEnvironment environment) : IGuestOrderingContract
+    IHostEnvironment environment,
+    IOtpDeliveryService otpDeliveryService,
+    ILogger<GuestOrderingService> logger) : IGuestOrderingContract
 {
     public async Task<ApiResponse<HotelMenuResponse>> GetHotelMenuAsync(string hotelCode, CancellationToken cancellationToken = default)
     {
@@ -129,6 +132,32 @@ public sealed class GuestOrderingService(
 
         db.OtpSessions.Add(session);
         await db.SaveChangesAsync(cancellationToken);
+
+        if (!environment.IsDevelopment())
+        {
+            var deliveryResult = await otpDeliveryService.SendOtpAsync(
+                request.MobileNumber,
+                otpCode,
+                expiresAt,
+                cancellationToken);
+
+            if (!deliveryResult.Success)
+            {
+                if (!useDummyOtp)
+                {
+                    return new ApiResponse<SendOtpResponse>(
+                        false,
+                        null,
+                        new ApiError("OTP_DELIVERY_FAILED", deliveryResult.ErrorMessage ?? "Unable to send OTP SMS right now."));
+                }
+
+                logger.LogWarning(
+                    "OTP SMS delivery skipped or failed in {Environment}. Falling back to dummy OTP. Mobile: {MobileNumber}. Reason: {Reason}",
+                    environment.EnvironmentName,
+                    request.MobileNumber,
+                    deliveryResult.ErrorMessage ?? "Unknown");
+            }
+        }
 
         var response = new SendOtpResponse(
             session.OtpSessionId.ToString(),
