@@ -109,7 +109,8 @@ public sealed class GuestOrderingService(
             return new ApiResponse<SendOtpResponse>(false, null, new ApiError("HOTEL_NOT_FOUND", "Invalid hotel code."));
         }
 
-        var otpCode = environment.IsDevelopment() ? "123456" : Random.Shared.Next(100000, 999999).ToString();
+        var useDummyOtp = environment.IsDevelopment() || environment.IsEnvironment("UAT");
+        var otpCode = useDummyOtp ? "123456" : Random.Shared.Next(100000, 999999).ToString();
         var expiresAt = clock.UtcNow.AddMinutes(5);
 
         var session = new OtpSession
