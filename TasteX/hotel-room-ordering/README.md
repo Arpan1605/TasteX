@@ -133,6 +133,7 @@ npm run build
 
 - COD flow only (payments integrations currently disabled).
 - Kitchen dashboard order status updates and COD received are real-time (polled).
-- `render.yaml` is included for Render deployment of UAT and Prod web services.
+- `render.yaml` is included for UAT deployment on Render.
+- `render.prod.yaml` is included for Prod deployment on Render.
 - Render free tier only allows one free Postgres database per workspace, so create separate Render workspaces for UAT and Prod and set `ConnectionStrings__OrderingDb` manually in each backend service.
 
