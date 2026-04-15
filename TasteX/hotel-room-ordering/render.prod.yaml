@@ -4,6 +4,7 @@ services:
     runtime: docker
     plan: free
     branch: main
+    rootDir: TasteX/hotel-room-ordering
     dockerfilePath: ./backend/HotelRoomOrdering.Api/Dockerfile
     autoDeploy: true
     envVars:
@@ -23,7 +24,7 @@ services:
     runtime: node
     plan: free
     branch: main
-    rootDir: .
+    rootDir: TasteX/hotel-room-ordering
     buildCommand: npm ci && npm run build
     startCommand: npm run serve:ssr:hotel-room-ordering
     autoDeploy: true
