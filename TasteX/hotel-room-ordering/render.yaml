@@ -29,7 +29,7 @@ services:
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
-        value: 20.17.0
+        value: 20.19.0
       - key: API_BASE_URL
         value: https://tastex-api-uat.onrender.com
 
@@ -63,6 +63,6 @@ services:
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
-        value: 20.17.0
+        value: 20.19.0
       - key: API_BASE_URL
         value: https://tastex-api-prod.onrender.com
