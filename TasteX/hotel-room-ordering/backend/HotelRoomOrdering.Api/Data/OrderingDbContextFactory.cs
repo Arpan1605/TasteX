@@ -8,8 +8,9 @@ public sealed class OrderingDbContextFactory : IDesignTimeDbContextFactory<Order
     public OrderingDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<OrderingDbContext>();
-        optionsBuilder.UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=HotelRoomOrdering;Trusted_Connection=True;TrustServerCertificate=True;");
+        optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=hotel_room_ordering;Username=postgres;Password=postgres");
         return new OrderingDbContext(optionsBuilder.Options);
     }
 }
+
 

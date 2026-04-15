@@ -1,0 +1,68 @@
+services:
+  - type: web
+    name: tastex-api-uat
+    runtime: docker
+    plan: free
+    branch: uat
+    dockerfilePath: ./backend/HotelRoomOrdering.Api/Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: UAT
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:$PORT
+      - key: ConnectionStrings__OrderingDb
+        sync: false
+      - key: Cors__AllowedOrigins__0
+        value: https://tastex-web-uat.onrender.com
+      - key: AppUrls__GuestBaseUrl
+        value: https://tastex-web-uat.onrender.com
+
+  - type: web
+    name: tastex-web-uat
+    runtime: node
+    plan: free
+    branch: uat
+    rootDir: .
+    buildCommand: npm ci && npm run build
+    startCommand: npm run serve:ssr:hotel-room-ordering
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20.17.0
+      - key: API_BASE_URL
+        value: https://tastex-api-uat.onrender.com
+
+  - type: web
+    name: tastex-api-prod
+    runtime: docker
+    plan: free
+    branch: main
+    dockerfilePath: ./backend/HotelRoomOrdering.Api/Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:$PORT
+      - key: ConnectionStrings__OrderingDb
+        sync: false
+      - key: Cors__AllowedOrigins__0
+        value: https://tastex-web-prod.onrender.com
+      - key: AppUrls__GuestBaseUrl
+        value: https://tastex-web-prod.onrender.com
+
+  - type: web
+    name: tastex-web-prod
+    runtime: node
+    plan: free
+    branch: main
+    rootDir: .
+    buildCommand: npm ci && npm run build
+    startCommand: npm run serve:ssr:hotel-room-ordering
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20.17.0
+      - key: API_BASE_URL
+        value: https://tastex-api-prod.onrender.com

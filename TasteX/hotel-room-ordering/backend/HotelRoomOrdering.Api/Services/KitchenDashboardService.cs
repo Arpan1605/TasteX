@@ -1,4 +1,4 @@
-﻿using HotelRoomOrdering.Api.Contracts.Common;
+using HotelRoomOrdering.Api.Contracts.Common;
 using HotelRoomOrdering.Api.Contracts.Contracts;
 using HotelRoomOrdering.Api.Contracts.Enums;
 using HotelRoomOrdering.Api.Contracts.Kitchen;
@@ -140,10 +140,7 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
     public async Task<ApiResponse<UpdateOrderStatusResponse>> UpdateOrderStatusAsync(UpdateOrderStatusRequest request, CancellationToken cancellationToken = default)
     {
         var order = await db.Orders
-            .AsNoTracking()
-            .Where(o => o.OrderId == request.OrderId)
-            .Select(o => new { o.OrderId, o.OrderNumber, o.OrderStatus })
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(o => o.OrderId == request.OrderId, cancellationToken);
 
         if (order is null)
         {
@@ -152,48 +149,29 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
 
         var previous = order.OrderStatus;
         var now = clock.UtcNow;
-        var nextStatus = (byte)request.NewStatus;
 
-        // Use SQL update to avoid failures when local DB schema drifts from EF model.
-        await db.Database.ExecuteSqlRawAsync(
-            "UPDATE dbo.Orders SET OrderStatus = {0}, UpdatedAtUtc = SYSUTCDATETIME() WHERE OrderId = {1};",
-            [nextStatus, request.OrderId],
-            cancellationToken);
+        order.OrderStatus = request.NewStatus;
+        order.UpdatedAtUtc = now;
 
         if (request.NewStatus == OrderStatus.Accepted)
         {
-            await db.Database.ExecuteSqlRawAsync(
-                "IF COL_LENGTH('dbo.Orders','AcceptedAtUtc') IS NOT NULL UPDATE dbo.Orders SET AcceptedAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
-                [request.OrderId],
-                cancellationToken);
+            order.AcceptedAtUtc = now;
         }
         else if (request.NewStatus == OrderStatus.Preparing)
         {
-            await db.Database.ExecuteSqlRawAsync(
-                "IF COL_LENGTH('dbo.Orders','PreparingAtUtc') IS NOT NULL UPDATE dbo.Orders SET PreparingAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
-                [request.OrderId],
-                cancellationToken);
+            order.PreparingAtUtc = now;
         }
         else if (request.NewStatus == OrderStatus.Ready)
         {
-            await db.Database.ExecuteSqlRawAsync(
-                "IF COL_LENGTH('dbo.Orders','ReadyAtUtc') IS NOT NULL UPDATE dbo.Orders SET ReadyAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
-                [request.OrderId],
-                cancellationToken);
+            order.ReadyAtUtc = now;
         }
         else if (request.NewStatus == OrderStatus.Delivered)
         {
-            await db.Database.ExecuteSqlRawAsync(
-                "IF COL_LENGTH('dbo.Orders','DeliveredAtUtc') IS NOT NULL UPDATE dbo.Orders SET DeliveredAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
-                [request.OrderId],
-                cancellationToken);
+            order.DeliveredAtUtc = now;
         }
         else if (request.NewStatus == OrderStatus.Cancelled)
         {
-            await db.Database.ExecuteSqlRawAsync(
-                "IF COL_LENGTH('dbo.Orders','CancelledAtUtc') IS NOT NULL UPDATE dbo.Orders SET CancelledAtUtc = SYSUTCDATETIME() WHERE OrderId = {0};",
-                [request.OrderId],
-                cancellationToken);
+            order.CancelledAtUtc = now;
         }
 
         // Keep history write best-effort.
@@ -225,10 +203,7 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
     public async Task<ApiResponse<UpdatePaymentStatusResponse>> UpdatePaymentStatusAsync(UpdatePaymentStatusRequest request, CancellationToken cancellationToken = default)
     {
         var order = await db.Orders
-            .AsNoTracking()
-            .Where(o => o.OrderId == request.OrderId)
-            .Select(o => new { o.OrderId, o.OrderNumber, o.PaymentMethod, o.PaymentStatus })
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(o => o.OrderId == request.OrderId, cancellationToken);
 
         if (order is null)
         {
@@ -250,10 +225,9 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
 
         if (previous != PaymentStatus.Paid)
         {
-            await db.Database.ExecuteSqlRawAsync(
-                "UPDATE dbo.Orders SET PaymentStatus = {0}, UpdatedAtUtc = SYSUTCDATETIME() WHERE OrderId = {1};",
-                [(byte)request.NewStatus, request.OrderId],
-                cancellationToken);
+            order.PaymentStatus = request.NewStatus;
+            order.UpdatedAtUtc = now;
+            await db.SaveChangesAsync(cancellationToken);
         }
 
         return new ApiResponse<UpdatePaymentStatusResponse>(
@@ -271,6 +245,8 @@ public sealed class KitchenDashboardService(OrderingDbContext db, IClock clock, 
         return $"{mobile[..2]}******{mobile[^2..]}";
     }
 }
+
+
 
 
 

@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+.angular/
+.git/
+.vscode/
+dist/
+node_modules/
+backend/_buildcheck/
+backend/_tmpbuild/

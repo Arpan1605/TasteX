@@ -24,9 +24,10 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema("public");
         modelBuilder.Entity<City>(entity =>
         {
-            entity.ToTable("Cities", "dbo");
+            entity.ToTable("Cities");
             entity.HasKey(x => x.CityId);
             entity.HasIndex(x => x.CityCode).IsUnique();
             entity.Property(x => x.CityCode).HasMaxLength(32);
@@ -36,7 +37,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<Kitchen>(entity =>
         {
-            entity.ToTable("Kitchens", "dbo");
+            entity.ToTable("Kitchens");
             entity.HasKey(x => x.KitchenId);
             entity.HasIndex(x => x.KitchenCode).IsUnique();
             entity.HasIndex(x => x.LoginUsername).IsUnique();
@@ -52,7 +53,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<Hotel>(entity =>
         {
-            entity.ToTable("Hotels", "dbo");
+            entity.ToTable("Hotels");
             entity.HasKey(x => x.HotelId);
             entity.HasIndex(x => x.HotelCode).IsUnique();
             entity.Property(x => x.HotelCode).HasMaxLength(32);
@@ -65,7 +66,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<Category>(entity =>
         {
-            entity.ToTable("Categories", "dbo");
+            entity.ToTable("Categories");
             entity.HasKey(x => x.CategoryId);
             entity.HasIndex(x => x.CategoryCode).IsUnique();
             entity.Property(x => x.CategoryCode).HasMaxLength(32);
@@ -75,7 +76,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<Item>(entity =>
         {
-            entity.ToTable("Items", "dbo");
+            entity.ToTable("Items");
             entity.HasKey(x => x.ItemId);
             entity.HasIndex(x => x.ItemCode).IsUnique();
             entity.Property(x => x.ItemCode).HasMaxLength(32);
@@ -87,7 +88,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<HotelMenuItem>(entity =>
         {
-            entity.ToTable("HotelMenuItems", "dbo");
+            entity.ToTable("HotelMenuItems");
             entity.HasKey(x => x.HotelMenuItemId);
             entity.HasIndex(x => new { x.HotelId, x.ItemId }).IsUnique();
             entity.Property(x => x.InventoryQuantity).HasDefaultValue(0);
@@ -98,7 +99,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<KitchenItemAvailability>(entity =>
         {
-            entity.ToTable("KitchenItemAvailability", "dbo");
+            entity.ToTable("KitchenItemAvailability");
             entity.HasKey(x => x.KitchenItemAvailabilityId);
             entity.HasIndex(x => new { x.KitchenId, x.ItemId }).IsUnique();
             entity.Property(x => x.EffectivePrice).HasPrecision(12, 2);
@@ -109,7 +110,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<OtpSession>(entity =>
         {
-            entity.ToTable("OtpSessions", "dbo");
+            entity.ToTable("OtpSessions");
             entity.HasKey(x => x.OtpSessionId);
             entity.Property(x => x.MobileNumber).HasMaxLength(20);
             entity.Property(x => x.OtpHash).HasMaxLength(256);
@@ -119,7 +120,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<GuestSession>(entity =>
         {
-            entity.ToTable("GuestSessions", "dbo");
+            entity.ToTable("GuestSessions");
             entity.HasKey(x => x.GuestSessionId);
             entity.Property(x => x.MobileNumber).HasMaxLength(20);
             entity.Property(x => x.SessionTokenHash).HasMaxLength(256);
@@ -129,7 +130,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<Order>(entity =>
         {
-            entity.ToTable("Orders", "dbo");
+            entity.ToTable("Orders");
             entity.HasKey(x => x.OrderId);
             entity.HasIndex(x => x.OrderNumber).IsUnique();
             entity.Property(x => x.OrderNumber).HasMaxLength(40);
@@ -151,7 +152,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<OrderLine>(entity =>
         {
-            entity.ToTable("OrderLines", "dbo");
+            entity.ToTable("OrderLines");
             entity.HasKey(x => x.OrderLineId);
             entity.Property(x => x.ItemSnapshotName).HasMaxLength(180);
             entity.Property(x => x.UnitPrice).HasPrecision(12, 2);
@@ -162,7 +163,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<OrderStatusHistory>(entity =>
         {
-            entity.ToTable("OrderStatusHistory", "dbo");
+            entity.ToTable("OrderStatusHistory");
             entity.HasKey(x => x.OrderStatusHistoryId);
             entity.Property(x => x.PreviousStatus).HasConversion<byte?>();
             entity.Property(x => x.NewStatus).HasConversion<byte>();
@@ -173,7 +174,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<PaymentOrder>(entity =>
         {
-            entity.ToTable("PaymentOrders", "dbo");
+            entity.ToTable("PaymentOrders");
             entity.HasKey(x => x.PaymentOrderId);
             entity.HasIndex(x => x.GatewayOrderId).IsUnique();
             entity.Property(x => x.GatewayProvider).HasConversion<byte>();
@@ -187,7 +188,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<PaymentTransaction>(entity =>
         {
-            entity.ToTable("PaymentTransactions", "dbo");
+            entity.ToTable("PaymentTransactions");
             entity.HasKey(x => x.PaymentTransactionId);
             entity.HasIndex(x => x.GatewayPaymentId).IsUnique();
             entity.Property(x => x.GatewayPaymentId).HasMaxLength(120);
@@ -200,7 +201,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         modelBuilder.Entity<WebhookLog>(entity =>
         {
-            entity.ToTable("WebhookLogs", "dbo");
+            entity.ToTable("WebhookLogs");
             entity.HasKey(x => x.WebhookLogId);
             entity.HasIndex(x => new { x.GatewayProvider, x.EventId }).IsUnique();
             entity.Property(x => x.GatewayProvider).HasConversion<byte>();
@@ -212,6 +213,8 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
         });
     }
 }
+
+
 
 
 

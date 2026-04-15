@@ -11,6 +11,7 @@ const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
+const apiBaseUrl = (process.env['API_BASE_URL'] || '').trim().replace(/\/$/, '');
 
 /**
  * Example Express Rest API endpoints can be defined here.
@@ -27,6 +28,12 @@ const angularApp = new AngularNodeAppEngine();
 /**
  * Serve static files from /browser
  */
+app.get('/app-config.js', (_req, res) => {
+  res.type('application/javascript');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(`globalThis.__APP_CONFIG__ = { apiBaseUrl: ${JSON.stringify(apiBaseUrl)} };`);
+});
+
 app.use(
   express.static(browserDistFolder, {
     maxAge: '1y',

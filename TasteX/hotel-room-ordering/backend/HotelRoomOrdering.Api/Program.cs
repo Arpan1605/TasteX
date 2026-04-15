@@ -30,7 +30,7 @@ builder.Services.AddDbContext<OrderingDbContext>(options =>
     var connectionString = builder.Configuration.GetConnectionString("OrderingDb")
         ?? throw new InvalidOperationException("Connection string 'OrderingDb' was not found.");
 
-    options.UseSqlServer(connectionString);
+    options.UseNpgsql(connectionString);
 });
 
 builder.Services.AddScoped<IClock, SystemClock>();
@@ -43,6 +43,12 @@ builder.Services.AddScoped<IWebhookContract, WebhookService>();
 builder.Services.AddScoped<IAdminManagementContract, AdminManagementService>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
+    db.Database.Migrate();
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -59,3 +65,4 @@ if (allowedOrigins.Length > 0)
 
 app.MapControllers();
 app.Run();
+
