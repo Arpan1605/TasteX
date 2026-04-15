@@ -69,6 +69,25 @@ app.Run();
 
 static string NormalizePostgresConnectionString(string connectionString)
 {
+    connectionString = connectionString.Trim();
+
+    if ((connectionString.StartsWith("\"") && connectionString.EndsWith("\"")) ||
+        (connectionString.StartsWith("'") && connectionString.EndsWith("'")))
+    {
+        connectionString = connectionString[1..^1].Trim();
+    }
+
+    var postgresUrlIndex = connectionString.IndexOf("postgres://", StringComparison.OrdinalIgnoreCase);
+    if (postgresUrlIndex < 0)
+    {
+        postgresUrlIndex = connectionString.IndexOf("postgresql://", StringComparison.OrdinalIgnoreCase);
+    }
+
+    if (postgresUrlIndex > 0)
+    {
+        connectionString = connectionString[postgresUrlIndex..].Trim();
+    }
+
     if (!connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
         !connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
     {
