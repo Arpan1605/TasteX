@@ -48,7 +48,8 @@ public sealed record MenuItemDto(
     decimal Price,
     bool IsVeg,
     bool IsAvailable,
-    string? ImageUrl);
+    string? ImageUrl,
+    int? PrepTimeMinutes);
 
 public sealed record MenuCategoryDto(
     long CategoryId,

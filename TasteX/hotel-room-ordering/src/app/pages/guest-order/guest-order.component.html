@@ -22,15 +22,15 @@
 
         <section class="stepper">
           <div class="step" [class.done]="stepDone(1)" [class.current]="currentStep() === 1">
-            <span>{{ stepDone(1) ? '?' : '1' }}</span><label>Room</label>
+            <span>1</span><label>Room</label>
           </div>
           <div class="line" [class.active]="stepDone(1)"></div>
           <div class="step" [class.done]="stepDone(2)" [class.current]="currentStep() === 2">
-            <span>{{ stepDone(2) ? '?' : '2' }}</span><label>Mobile</label>
+            <span>2</span><label>Mobile</label>
           </div>
           <div class="line" [class.active]="stepDone(2)"></div>
           <div class="step" [class.done]="stepDone(3)" [class.current]="currentStep() === 3">
-            <span>{{ stepDone(3) ? '?' : '3' }}</span><label>Verify</label>
+            <span>3</span><label>Verify</label>
           </div>
         </section>
 
@@ -75,7 +75,13 @@
             <div class="otp-demo">{{ otpHint() }}</div>
             <div class="otp-row">
               @for (digit of otpDigits(); track $index) {
-                <input class="otp-cell" maxlength="1" inputmode="numeric" [ngModel]="digit" (ngModelChange)="onOtpInput($index, $event)" />
+                <input
+                  class="otp-cell"
+                  maxlength="1"
+                  inputmode="numeric"
+                  [value]="digit"
+                  (input)="onOtpInput($index, ($any($event.target)).value, $event)"
+                  (keydown)="onOtpKeyDown($index, $event)" />
               }
             </div>
             @if (otpError()) {
@@ -88,11 +94,7 @@
       </main>
     } @else {
       <div class="app-strip">
-        <span>QR Hotel Ordering System</span>
-        <i class="pi pi-chevron-down"></i>
-      </div>      <div class="guest-tabs">
-        <button type="button" class="guest-tab" [class.active]="activeGuestTab() === 'menu'" (click)="switchGuestTab('menu')">Menu</button>
-        <button type="button" class="guest-tab" [class.active]="activeGuestTab() === 'status'" [disabled]="!showStatusTab()" (click)="switchGuestTab('status')">Order Status</button>
+        <span>TasteX Ordering System</span>
       </div>
       @if (trackedOrders().length > 0 && activeGuestTab() === 'status') {
         <section class="order-status-panel">
@@ -112,6 +114,7 @@
                     <div>
                       <h4>{{ order.orderNo }}</h4>
                       <p>Live Status: {{ order.status }}</p>
+                      <p>{{ orderArrivalText(order) }}</p>
                     </div>
                     <i class="pi" [class.pi-chevron-up]="isTrackedOrderExpanded(order.orderNo)" [class.pi-chevron-down]="!isTrackedOrderExpanded(order.orderNo)"></i>
                   </button>
@@ -139,6 +142,7 @@
                       }
 
                       <div class="order-card-details">
+                        <span>ETA: {{ orderArrivalText(order) }}</span>
                         <span>Updated: {{ formatStatusTime(order.updatedAt) }}</span>
                         <span>Created: {{ formatStatusTime(order.createdAt) }}</span>
                         <span>Payment: {{ order.paymentMethod }} • {{ order.paymentStatus }}</span>
@@ -169,105 +173,105 @@
             <p>Your COD order has been placed successfully.</p>
           </article>
         </section>
-      } @else if (!showCart() && activeGuestTab() === 'menu') {
-        <section class="menu-top">
-          <div class="title-wrap">
-            <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back"></button>
-            <div class="menu-head-copy">
-              <h1>{{ selectedHotel.name }}</h1>
-              <p>Room {{ roomNumber() }} • {{ hotelContext().cityName }}{{ hotelContext().stateName && hotelContext().stateName !== '-' ? ', ' + hotelContext().stateName : '' }}</p>
-            </div>
-            @if (cartItemCount() > 0) {
-              <button type="button" class="top-cart-btn" aria-label="Cart" (click)="openCart()">
-                <i class="pi pi-shopping-cart"></i>
-                <span>{{ cartItemCount() }}</span>
-                <em>{{ cartItemCount() }}</em>
-              </button>
-            }
-          </div>
-
-          <div class="search-box">
-            <i class="pi pi-search"></i>
-            <input
-              type="text"
-              placeholder="Search items..."
-              [ngModel]="searchTerm()"
-              (ngModelChange)="searchTerm.set($event)"
-            />
-          </div>
-
-          <div class="filter-row">
-            <button type="button" class="chip" [class.active]="selectedPreference() === 'All'" (click)="setPreference('All')">All</button>
-            <button type="button" class="chip" [class.active]="selectedPreference() === 'Veg'" (click)="setPreference('Veg')">Pure Veg</button>
-            <button type="button" class="chip" [class.active]="selectedPreference() === 'NonVeg'" (click)="setPreference('NonVeg')">Non-Veg</button>
-          </div>
-        </section>
-
-        <section class="menu-shell">
-          @for (section of filteredMenu(); track section.category.id) {
-            <article class="menu-panel">
-              <button type="button" class="menu-panel-header" (click)="toggleCategory(section.category.id)">
-                <div class="header-row">
-                  <div class="category-head">
-                    @if (section.category.icon && isCategoryIconImage(section.category.icon)) {
-                      <img class="cat-icon-img" [src]="section.category.icon" [alt]="section.category.name + ' icon'" />
-                    } @else {
-                      <span class="cat-icon">{{ categoryDisplayIcon(section.category) }}</span>
-                    }
-                    <span>{{ section.category.name }}</span>
-                    <span class="count-pill">{{ section.items.length }}</span>
-                  </div>
-                  <i class="pi" [class.pi-chevron-up]="isCategoryOpen(section.category.id)" [class.pi-chevron-down]="!isCategoryOpen(section.category.id)"></i>
-                </div>
-              </button>
-
-              @if (isCategoryOpen(section.category.id)) {
-                <div class="menu-panel-content">
-                  @for (item of section.items; track item.id) {
-                    <div class="item-row">
-                      <div class="item-info">
-                        <div class="title-line">
-                          <span class="food-dot" [class.veg]="item.isVeg" [class.nonveg]="!item.isVeg"></span>
-                          <h3>{{ item.name }}</h3>
-                        </div>
-                        <p>{{ item.description }}</p>
-                        <div class="price-line">
-                          <strong>{{ item.price | currency:'INR':'symbol':'1.0-0' }}</strong>
-                          <span>{{ itemEta(item.id) }}</span>
-                        </div>
-                      </div>
-
-                      <div class="item-right">
-                        <img [src]="itemImage(item)" [alt]="item.name" />
-                        @if (cartQuantity(item.id) === 0) {
-                          <button type="button" class="add-btn" (click)="addToCart(item.id)">+ Add</button>
-                        } @else {
-                          <div class="qty-wrap">
-                            <button type="button" class="qty-btn" (click)="decreaseQuantity(item.id)">-</button>
-                            <span>{{ cartQuantity(item.id) }}</span>
-                            <button type="button" class="qty-btn" (click)="increaseQuantity(item.id)">+</button>
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  }
-                </div>
+      } @else if (activeGuestTab() === 'menu') {
+        @if (!showCart()) {
+          <section class="menu-top">
+            <div class="title-wrap">
+              <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back"></button>
+              <div class="menu-head-copy">
+                <h1>{{ selectedHotel.name }}</h1>
+                <p>Room {{ roomNumber() }} • {{ hotelContext().cityName }}{{ hotelContext().stateName && hotelContext().stateName !== '-' ? ', ' + hotelContext().stateName : '' }}</p>
+              </div>
+              @if (cartItemCount() > 0) {
+                <button type="button" class="top-cart-btn" aria-label="Cart" (click)="openCart()">
+                  <i class="pi pi-shopping-cart"></i>
+                  <span>{{ cartItemCount() }}</span>
+                  <em>{{ cartItemCount() }}</em>
+                </button>
               }
-            </article>
-          }
-        </section>
-
-        @if (cartItemCount() > 0) {
-          <button type="button" class="sticky-cart" (click)="openCart()">
-            <div class="cart-left">
-              <span class="cart-count">{{ cartItemCount() }}</span>
-              <strong>View Cart</strong>
             </div>
-            <p>{{ cartTotal() | currency:'INR':'symbol':'1.0-0' }}</p>
-          </button>
-        }
-      } @else {
-        @if (!showPayment()) {
+
+            <div class="search-box">
+              <i class="pi pi-search"></i>
+              <input
+                type="text"
+                placeholder="Search items..."
+                [ngModel]="searchTerm()"
+                (ngModelChange)="searchTerm.set($event)"
+              />
+            </div>
+
+            <div class="filter-row">
+              <button type="button" class="chip" [class.active]="selectedPreference() === 'All'" (click)="setPreference('All')">All</button>
+              <button type="button" class="chip" [class.active]="selectedPreference() === 'Veg'" (click)="setPreference('Veg')">Pure Veg</button>
+              <button type="button" class="chip" [class.active]="selectedPreference() === 'NonVeg'" (click)="setPreference('NonVeg')">Non-Veg</button>
+            </div>
+          </section>
+
+          <section class="menu-shell">
+            @for (section of filteredMenu(); track section.category.id) {
+              <article class="menu-panel">
+                <button type="button" class="menu-panel-header" (click)="toggleCategory(section.category.id)">
+                  <div class="header-row">
+                    <div class="category-head">
+                      @if (section.category.icon && isCategoryIconImage(section.category.icon)) {
+                        <img class="cat-icon-img" [src]="section.category.icon" [alt]="section.category.name + ' icon'" />
+                      } @else {
+                        <span class="cat-icon">{{ categoryDisplayIcon(section.category) }}</span>
+                      }
+                      <span>{{ section.category.name }}</span>
+                      <span class="count-pill">{{ section.items.length }}</span>
+                    </div>
+                    <i class="pi" [class.pi-chevron-up]="isCategoryOpen(section.category.id)" [class.pi-chevron-down]="!isCategoryOpen(section.category.id)"></i>
+                  </div>
+                </button>
+
+                @if (isCategoryOpen(section.category.id)) {
+                  <div class="menu-panel-content">
+                    @for (item of section.items; track item.id) {
+                      <div class="item-row">
+                        <div class="item-info">
+                          <div class="title-line">
+                            <span class="food-dot" [class.veg]="item.isVeg" [class.nonveg]="!item.isVeg"></span>
+                            <h3>{{ item.name }}</h3>
+                          </div>
+                          <p>{{ item.description }}</p>
+                          <div class="price-line">
+                            <strong>{{ item.price | currency:'INR':'symbol':'1.0-0' }}</strong>
+                            <span>{{ itemEta(item) }}</span>
+                          </div>
+                        </div>
+
+                        <div class="item-right">
+                          <img [src]="itemImage(item)" [alt]="item.name" />
+                          @if (cartQuantity(item.id) === 0) {
+                            <button type="button" class="add-btn" (click)="addToCart(item.id)">+ Add</button>
+                          } @else {
+                            <div class="qty-wrap">
+                              <button type="button" class="qty-btn" (click)="decreaseQuantity(item.id)">-</button>
+                              <span>{{ cartQuantity(item.id) }}</span>
+                              <button type="button" class="qty-btn" (click)="increaseQuantity(item.id)">+</button>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </article>
+            }
+          </section>
+
+          @if (cartItemCount() > 0) {
+            <button type="button" class="sticky-cart" (click)="openCart()">
+              <div class="cart-left">
+                <span class="cart-count">{{ cartItemCount() }}</span>
+                <strong>View Cart</strong>
+              </div>
+              <p>{{ cartTotal() | currency:'INR':'symbol':'1.0-0' }}</p>
+            </button>
+          }
+        } @else if (!showPayment()) {
           <section class="menu-top cart-top">
             <div class="title-wrap">
               <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back" (click)="backToMenu()"></button>
@@ -348,19 +352,64 @@
             </article>
 
             <article class="bill-card">
+              <h3>Receive Order At</h3>
+              <p class="delivery-pref-sub">This choice is required before you confirm the order.</p>
+              <div class="delivery-pref-grid">
+                <button
+                  type="button"
+                  class="delivery-pref-card"
+                  [class.active]="selectedDeliveryPreference() === 'room'"
+                  (click)="setDeliveryPreference('room')">
+                  <div class="delivery-pref-icon"><i class="pi pi-home"></i></div>
+                  <div class="delivery-pref-copy">
+                    <strong>Room</strong>
+                    <span>Deliver directly to room {{ roomNumber() }}</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  class="delivery-pref-card"
+                  [class.active]="selectedDeliveryPreference() === 'reception'"
+                  (click)="setDeliveryPreference('reception')">
+                  <div class="delivery-pref-icon"><i class="pi pi-building"></i></div>
+                  <div class="delivery-pref-copy">
+                    <strong>Reception</strong>
+                    <span>We’ll send the order to the hotel reception desk</span>
+                  </div>
+                </button>
+              </div>
+              @if (deliveryPreferenceError()) {
+                <small class="err">{{ deliveryPreferenceError() }}</small>
+              }
+            </article>
+
+            <article class="bill-card">
               <h3>Payment Method</h3>
               <button type="button" class="method-card active">
                 <div class="method-icon"><i class="pi pi-wallet"></i></div>
                 <div class="method-copy">
                   <strong>Pay on Delivery</strong>
-                  <span>Cash payment at room delivery</span>
+                  <span>
+                    Cash payment on
+                    @if (selectedDeliveryPreference() === 'reception') {
+                      reception handover
+                    } @else {
+                      room delivery
+                    }
+                  </span>
                 </div>
                 <i class="pi pi-check-circle"></i>
               </button>
             </article>
 
             <div class="note-box">
-              Order will be confirmed instantly. Pay by cash when your food is delivered.
+              Order will be confirmed instantly. Pay by cash when your food is
+              @if (selectedDeliveryPreference() === 'reception') {
+                handed over at reception.
+              } @else {
+                delivered.
+              }
             </div>
           </section>
 
@@ -379,6 +428,11 @@
           <p-message [severity]="checkoutSuccess() ? 'success' : 'error'" variant="simple">{{ checkoutMessage() }}</p-message>
         </div>
       }
+
+      <nav class="guest-tabs guest-tabs-bottom" aria-label="Guest navigation">
+        <button type="button" class="guest-tab" [class.active]="activeGuestTab() === 'menu'" (click)="switchGuestTab('menu')">Menu</button>
+        <button type="button" class="guest-tab" [class.active]="activeGuestTab() === 'status'" [disabled]="!showStatusTab()" (click)="switchGuestTab('status')">Order Status</button>
+      </nav>
     }
   }
 </div>

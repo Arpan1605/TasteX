@@ -9,6 +9,7 @@ import { MessageModule } from 'primeng/message';
 import { GuestApiService } from '../../services/guest-api.service';
 
 type FoodPreference = 'All' | 'Veg' | 'NonVeg';
+type DeliveryPreference = 'room' | 'reception';
 
 interface GuestHotelView {
   id: number;
@@ -29,6 +30,7 @@ interface MenuItemView {
   isVeg: boolean;
   active: boolean;
   imageUrl: string;
+  prepTimeMinutes: number;
 }
 
 interface MenuSectionView {
@@ -66,6 +68,7 @@ export class GuestOrderComponent implements OnDestroy {
   otpError = signal('');
   roomError = signal('');
   mobileError = signal('');
+  deliveryPreferenceError = signal('');
   remainingSeconds = signal(0);
   verified = signal(false);
   showCart = signal(false);
@@ -78,15 +81,32 @@ export class GuestOrderComponent implements OnDestroy {
   private readonly otpSessionId = signal<string | null>(null);
   private readonly guestSessionToken = signal<string | null>(null);
   private readonly trackedOrderNumbers = signal<string[]>([]);
-  private readonly orderStatusByNumber = signal<Record<string, { status: string; updatedAt: string; createdAt: string; serviceTimeMinutes: number; totalAmount: number; currencyCode: string; paymentStatus: string; paymentMethod: string }>>({});
+  private readonly orderStatusByNumber = signal<Record<string, {
+    status: string;
+    updatedAt: string;
+    createdAt: string;
+    serviceTimeMinutes: number;
+    estimatedPrepTimeMinutes: number;
+    preparingAt: string;
+    readyAt: string;
+    deliveredAt: string;
+    estimatedReadyAt: string;
+    totalAmount: number;
+    currencyCode: string;
+    paymentStatus: string;
+    paymentMethod: string;
+  }>>({});
   private readonly trackedOrdersStorageKeyPrefix = 'tx_guest_orders_';
   private readonly selectedPreferenceState = signal<FoodPreference>('All');
+  readonly selectedDeliveryPreference = signal<DeliveryPreference | null>(null);
   private readonly menuSections = signal<MenuSectionView[]>([]);
   private readonly cartLines = signal<CartLineView[]>([]);
+  private readonly nowTick = signal(Date.now());
 
   private timer: ReturnType<typeof setInterval> | null = null;
   private orderPlacedTimer: ReturnType<typeof setTimeout> | null = null;
   private orderStatusPoller: ReturnType<typeof setInterval> | null = null;
+  private nowTicker: ReturnType<typeof setInterval> | null = null;
 
   readonly cartItems = computed(() => this.cartLines());
   readonly cartTotal = computed(() => this.cartLines().reduce((sum, line) => sum + (line.item.price * line.quantity), 0));
@@ -106,6 +126,11 @@ export class GuestOrderComponent implements OnDestroy {
         updatedAt: '',
         createdAt: '',
         serviceTimeMinutes: 0,
+        estimatedPrepTimeMinutes: 15,
+        preparingAt: '',
+        readyAt: '',
+        deliveredAt: '',
+        estimatedReadyAt: '',
         totalAmount: 0,
         currencyCode: 'INR',
         paymentStatus: 'Pending',
@@ -161,18 +186,6 @@ export class GuestOrderComponent implements OnDestroy {
     return map;
   });
 
-  private readonly etaByItemId: Record<number, string> = {
-    1001: '~10 min',
-    1002: '~12 min',
-    2001: '~20 min',
-    2002: '~22 min',
-    2003: '~25 min',
-    3001: '~8 min',
-    3002: '~14 min',
-    4001: '~6 min',
-    4002: '~7 min'
-  };
-
   private readonly imageByItemId: Record<number, string> = {
     1001: 'https://picsum.photos/id/1080/140/100',
     1002: 'https://picsum.photos/id/292/140/100',
@@ -194,6 +207,7 @@ export class GuestOrderComponent implements OnDestroy {
       this.startOrderStatusPolling();
       this.activeGuestTab.set('status');
     }
+    this.startNowTicker();
     void this.loadHotelMenu();
   }
 
@@ -206,6 +220,9 @@ export class GuestOrderComponent implements OnDestroy {
     }
     if (this.orderStatusPoller) {
       clearInterval(this.orderStatusPoller);
+    }
+    if (this.nowTicker) {
+      clearInterval(this.nowTicker);
     }
   }
 
@@ -266,12 +283,56 @@ export class GuestOrderComponent implements OnDestroy {
     }
   }
 
-  onOtpInput(index: number, value: string): void {
+  onOtpInput(index: number, value: string, event?: Event): void {
     const digit = value.replace(/\D/g, '').slice(-1);
     const next = [...this.otpDigits()];
     next[index] = digit;
     this.otpDigits.set(next);
     this.otpError.set('');
+
+    if (digit && event) {
+      const currentInput = event.target as HTMLInputElement | null;
+      const nextInput = currentInput?.nextElementSibling instanceof HTMLInputElement
+        ? currentInput.nextElementSibling
+        : null;
+      nextInput?.focus();
+      nextInput?.select();
+    }
+  }
+
+  onOtpKeyDown(index: number, event: KeyboardEvent): void {
+    const currentInput = event.target as HTMLInputElement | null;
+    if (!currentInput) {
+      return;
+    }
+
+    if (event.key === 'Backspace' && !currentInput.value && index > 0) {
+      const previousInput = currentInput.previousElementSibling instanceof HTMLInputElement
+        ? currentInput.previousElementSibling
+        : null;
+      previousInput?.focus();
+      previousInput?.select();
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' && index > 0) {
+      event.preventDefault();
+      const previousInput = currentInput.previousElementSibling instanceof HTMLInputElement
+        ? currentInput.previousElementSibling
+        : null;
+      previousInput?.focus();
+      previousInput?.select();
+      return;
+    }
+
+    if (event.key === 'ArrowRight' && index < this.otpDigits().length - 1) {
+      event.preventDefault();
+      const nextInput = currentInput.nextElementSibling instanceof HTMLInputElement
+        ? currentInput.nextElementSibling
+        : null;
+      nextInput?.focus();
+      nextInput?.select();
+    }
   }
 
   async verifyOtp(): Promise<void> {
@@ -371,12 +432,19 @@ export class GuestOrderComponent implements OnDestroy {
   openPayment(): void {
     if (this.cartItemCount() > 0) {
       this.showOrderPlaced.set(false);
+      this.deliveryPreferenceError.set('');
       this.showPayment.set(true);
     }
   }
 
   backToCart(): void {
+    this.deliveryPreferenceError.set('');
     this.showPayment.set(false);
+  }
+
+  setDeliveryPreference(preference: DeliveryPreference): void {
+    this.selectedDeliveryPreference.set(preference);
+    this.deliveryPreferenceError.set('');
   }
 
   lineTotal(itemId: number): number {
@@ -408,8 +476,35 @@ export class GuestOrderComponent implements OnDestroy {
     const currentIndex = this.trackerStageIndex(currentStatus);
     return currentIndex > index;
   }
-  itemEta(itemId: number): string {
-    return this.etaByItemId[itemId] ?? '~15 min';
+  itemEta(item: MenuItemView): string {
+    return `~${Math.max(1, item.prepTimeMinutes || 15)} min`;
+  }
+
+  orderArrivalText(order: {
+    status: string;
+    preparingAt: string;
+    estimatedReadyAt: string;
+    estimatedPrepTimeMinutes: number;
+  }): string {
+    this.nowTick();
+
+    const status = (order.status || '').toLowerCase();
+    if (status === 'delivered') return 'Delivered';
+    if (status === 'rejected') return 'Order was rejected';
+    if (status === 'ready') return 'Ready for delivery';
+    if (!order.preparingAt) return 'Preparing will start soon';
+
+    const estimatedReadyAtMs = Date.parse(order.estimatedReadyAt);
+    if (!Number.isFinite(estimatedReadyAtMs)) {
+      return `Arriving in ~${Math.max(1, order.estimatedPrepTimeMinutes || 15)} min`;
+    }
+
+    const remainingMs = estimatedReadyAtMs - this.nowTick();
+    if (remainingMs <= 0) {
+      return status === 'preparing' ? 'Arriving any moment' : 'Ready for delivery';
+    }
+
+    return `Arriving in ${Math.max(1, Math.ceil(remainingMs / 60000))} min`;
   }
 
   itemImage(item: MenuItemView): string {
@@ -466,15 +561,24 @@ export class GuestOrderComponent implements OnDestroy {
       return;
     }
 
+    const deliveryPreference = this.selectedDeliveryPreference();
+    if (!deliveryPreference) {
+      this.deliveryPreferenceError.set('Please choose whether to receive the order at your room or at reception.');
+      return;
+    }
+
     try {
       const response = await firstValueFrom(this.guestApi.checkout({
         guestSessionToken: token,
         hotelCode: this.hotelCode(),
         roomNumber: this.roomNumber().trim() || undefined,
+        deliveryPreference,
         currencyCode: 'INR',
         paymentMethod: 1,
         lines,
-        guestNotes: `Room ${this.roomNumber().trim()}`,
+        guestNotes: deliveryPreference === 'room'
+          ? `Room ${this.roomNumber().trim()}`
+          : `Please hand over the order at reception for room ${this.roomNumber().trim()}`,
         clientOrderRef: `UI-${Date.now()}`
       }));
 
@@ -496,6 +600,8 @@ export class GuestOrderComponent implements OnDestroy {
       this.activeGuestTab.set('status');
       this.showOrderPlaced.set(true);
       this.activeGuestTab.set('status');
+      this.deliveryPreferenceError.set('');
+      this.selectedDeliveryPreference.set(null);
       this.showPayment.set(false);
       this.showCart.set(false);
       this.cartLines.set([]);
@@ -575,7 +681,8 @@ export class GuestOrderComponent implements OnDestroy {
               price: item.price,
               isVeg: item.isVeg,
               active: item.isAvailable,
-              imageUrl: item.imageUrl?.trim() || ''
+              imageUrl: item.imageUrl?.trim() || '',
+              prepTimeMinutes: item.prepTimeMinutes ?? 15
             }))
         }));
 
@@ -705,6 +812,16 @@ export class GuestOrderComponent implements OnDestroy {
     }, 4000);
   }
 
+  private startNowTicker(): void {
+    if (this.nowTicker) {
+      clearInterval(this.nowTicker);
+    }
+
+    this.nowTicker = setInterval(() => {
+      this.nowTick.set(Date.now());
+    }, 1000);
+  }
+
   private async refreshTrackedOrderStatuses(): Promise<void> {
     const orderNumbers = this.trackedOrderNumbers();
     if (orderNumbers.length === 0) {
@@ -721,7 +838,21 @@ export class GuestOrderComponent implements OnDestroy {
         }
       }));
 
-      const updates: Record<string, { status: string; updatedAt: string; createdAt: string; serviceTimeMinutes: number; totalAmount: number; currencyCode: string; paymentStatus: string; paymentMethod: string }> = { ...this.orderStatusByNumber() };
+      const updates: Record<string, {
+        status: string;
+        updatedAt: string;
+        createdAt: string;
+        serviceTimeMinutes: number;
+        estimatedPrepTimeMinutes: number;
+        preparingAt: string;
+        readyAt: string;
+        deliveredAt: string;
+        estimatedReadyAt: string;
+        totalAmount: number;
+        currencyCode: string;
+        paymentStatus: string;
+        paymentMethod: string;
+      }> = { ...this.orderStatusByNumber() };
 
       responses.forEach((entry) => {
         if (!entry || !entry.response.success || !entry.response.data) {
@@ -734,6 +865,11 @@ export class GuestOrderComponent implements OnDestroy {
           updatedAt: payload.updatedAtUtc,
           createdAt: payload.createdAtUtc,
           serviceTimeMinutes: payload.serviceTimeMinutes,
+          estimatedPrepTimeMinutes: payload.estimatedPrepTimeMinutes,
+          preparingAt: payload.preparingAtUtc ?? '',
+          readyAt: payload.readyAtUtc ?? '',
+          deliveredAt: payload.deliveredAtUtc ?? '',
+          estimatedReadyAt: payload.estimatedReadyAtUtc ?? '',
           totalAmount: payload.totalAmount,
           currencyCode: payload.currencyCode,
           paymentStatus: this.mapGuestPaymentStatus(payload.paymentStatus),

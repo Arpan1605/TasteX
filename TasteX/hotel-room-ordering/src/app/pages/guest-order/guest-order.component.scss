@@ -1,11 +1,5 @@
 ﻿
 
-.app-strip .pi {
-  font-size: 0.7rem;
-  opacity: 0.85;
-}
-
-
 .order-status-banner {
   max-width: 440px;
   margin: 0.6rem auto 0;
@@ -93,6 +87,7 @@
 .verify-page {
   min-height: 100vh;
   background: #f3f3f1;
+  padding-bottom: 6.8rem;
 }
 
 .top-bar,
@@ -372,6 +367,66 @@ h1 {
   margin-top: 0.4rem;
   color: #dc2626;
   font-size: 0.85rem;
+}
+
+.delivery-pref-sub {
+  margin: 0.2rem 0 0.75rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.delivery-pref-grid {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.delivery-pref-card {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  background: #fff;
+  padding: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.delivery-pref-card.active {
+  border-color: #ff8a00;
+  background: #fff7ed;
+  box-shadow: 0 0 0 2px rgba(255, 138, 0, 0.12);
+}
+
+.delivery-pref-icon {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.85rem;
+  background: #fff1df;
+  color: #ff7a00;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+.delivery-pref-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.delivery-pref-copy strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+.delivery-pref-copy span {
+  color: #64748b;
+  font-size: 0.86rem;
+  line-height: 1.35;
 }
 
 .title-wrap {
@@ -1340,7 +1395,6 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
   box-shadow: var(--shadow-soft);
   color: var(--ink);
 }
@@ -1349,11 +1403,6 @@ h1 {
   font-weight: 700;
   font-size: 0.95rem;
   letter-spacing: 0.2px;
-}
-
-.app-strip .pi {
-  font-size: 0.75rem;
-  opacity: 0.55;
 }
 
 .guest-tabs,
@@ -1371,4 +1420,13 @@ h1 {
 
 .order-status-panel {
   padding: 0;
+}
+
+.guest-tabs-bottom {
+  position: fixed;
+  left: 50%;
+  bottom: max(0.9rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  margin: 0;
+  z-index: 40;
 }

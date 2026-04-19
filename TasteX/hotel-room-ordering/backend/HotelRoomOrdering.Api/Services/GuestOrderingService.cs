@@ -84,7 +84,8 @@ public sealed class GuestOrderingService(
                             effective?.EffectivePrice ?? hmi.Item.BasePrice,
                             hmi.Item.IsVeg,
                             isAvailable,
-                            hmi.ImageUrl);
+                            hmi.ImageUrl,
+                            hmi.PrepTimeMinutes);
                     })
                     .ToList()))
             .ToList();
@@ -322,6 +323,17 @@ public sealed class GuestOrderingService(
         }
 
         var subtotal = lines.Sum(l => l.LineTotal);
+        var deliveryPreference = string.IsNullOrWhiteSpace(request.DeliveryPreference)
+            ? "Room"
+            : request.DeliveryPreference.Trim();
+        var guestNotes = string.Join(
+            " | ",
+            new[]
+            {
+                $"Delivery Preference: {deliveryPreference}",
+                string.IsNullOrWhiteSpace(request.GuestNotes) ? null : request.GuestNotes.Trim()
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
         var order = new Order
         {
             OrderNumber = $"TX-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
@@ -340,7 +352,7 @@ public sealed class GuestOrderingService(
             WebhookVerified = false,
             OrderStatus = OrderStatus.Accepted,
             AcceptedAtUtc = now,
-            GuestNotes = request.GuestNotes,
+            GuestNotes = guestNotes,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
             Lines = lines
@@ -365,15 +377,28 @@ public sealed class GuestOrderingService(
 
     public async Task<ApiResponse<OrderStatusResponse>> GetOrderStatusAsync(string orderNumber, CancellationToken cancellationToken = default)
     {
-        var order = await db.Orders.FirstOrDefaultAsync(o => o.OrderNumber == orderNumber, cancellationToken);
+        var order = await db.Orders
+            .AsNoTracking()
+            .Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.OrderNumber == orderNumber, cancellationToken);
         if (order is null)
         {
             return new ApiResponse<OrderStatusResponse>(false, null, new ApiError("ORDER_NOT_FOUND", "Order not found."));
         }
 
         var hotelCode = await db.Hotels.Where(h => h.HotelId == order.HotelId).Select(h => h.HotelCode).FirstAsync(cancellationToken);
+        var itemIds = order.Lines.Select(line => line.ItemId).Distinct().ToArray();
+        var prepTimeLookup = await db.HotelMenuItems
+            .AsNoTracking()
+            .Where(hmi => hmi.HotelId == order.HotelId && itemIds.Contains(hmi.ItemId))
+            .ToDictionaryAsync(hmi => hmi.ItemId, hmi => hmi.PrepTimeMinutes ?? 15, cancellationToken);
 
         var serviceTime = (int)Math.Max(1, (clock.UtcNow - order.CreatedAtUtc).TotalMinutes);
+        var estimatedPrepTimeMinutes = Math.Max(1, order.Lines
+            .Select(line => prepTimeLookup.TryGetValue(line.ItemId, out var prepTime) ? prepTime : 15)
+            .DefaultIfEmpty(15)
+            .Max());
+        var estimatedReadyAtUtc = order.PreparingAtUtc?.AddMinutes(estimatedPrepTimeMinutes);
         var response = new OrderStatusResponse(
             order.OrderId,
             order.OrderNumber,
@@ -384,6 +409,11 @@ public sealed class GuestOrderingService(
             new DateTimeOffset(order.CreatedAtUtc, TimeSpan.Zero),
             new DateTimeOffset(order.UpdatedAtUtc, TimeSpan.Zero),
             serviceTime,
+            estimatedPrepTimeMinutes,
+            order.PreparingAtUtc.HasValue ? new DateTimeOffset(order.PreparingAtUtc.Value, TimeSpan.Zero) : null,
+            order.ReadyAtUtc.HasValue ? new DateTimeOffset(order.ReadyAtUtc.Value, TimeSpan.Zero) : null,
+            order.DeliveredAtUtc.HasValue ? new DateTimeOffset(order.DeliveredAtUtc.Value, TimeSpan.Zero) : null,
+            estimatedReadyAtUtc.HasValue ? new DateTimeOffset(estimatedReadyAtUtc.Value, TimeSpan.Zero) : null,
             order.TotalAmount,
             order.CurrencyCode);
 

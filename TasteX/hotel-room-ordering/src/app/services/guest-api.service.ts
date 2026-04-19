@@ -24,6 +24,7 @@ export interface GuestMenuItemDto {
   isVeg: boolean;
   isAvailable: boolean;
   imageUrl?: string | null;
+  prepTimeMinutes?: number | null;
 }
 
 export interface GuestMenuCategoryDto {
@@ -77,6 +78,7 @@ export interface CheckoutRequest {
   guestSessionToken: string;
   hotelCode: string;
   roomNumber?: string;
+  deliveryPreference?: string;
   currencyCode: string;
   paymentMethod: number;
   lines: Array<{ itemId: number; quantity: number }>;
@@ -106,6 +108,11 @@ export interface GuestOrderStatusResponse {
   createdAtUtc: string;
   updatedAtUtc: string;
   serviceTimeMinutes: number;
+  estimatedPrepTimeMinutes: number;
+  preparingAtUtc?: string | null;
+  readyAtUtc?: string | null;
+  deliveredAtUtc?: string | null;
+  estimatedReadyAtUtc?: string | null;
   totalAmount: number;
   currencyCode: string;
 }
