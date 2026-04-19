@@ -254,6 +254,11 @@ export class GuestOrderComponent implements OnDestroy {
       return;
     }
 
+    const normalizedMobile = this.normalizeMobileNumberForStorage(mobile);
+    if (this.verifiedMobileNumber() !== normalizedMobile) {
+      this.resetGuestSessionState();
+    }
+
     try {
       const response = await firstValueFrom(this.guestApi.sendOtp({
         mobileNumber: mobile,
@@ -358,10 +363,9 @@ export class GuestOrderComponent implements OnDestroy {
 
       this.guestSessionToken.set(response.data.guestSessionToken);
       this.verifiedMobileNumber.set(this.normalizeMobileNumberForStorage(this.mobile().trim()));
+      this.clearTrackedOrderState();
       const sameMobileOrders = this.loadTrackedOrderNumbers(this.hotelCode(), this.mobile().trim());
       this.trackedOrderNumbers.set(sameMobileOrders);
-      this.orderStatusByNumber.set({});
-      this.expandedTrackedOrders.set(new Set());
       if (sameMobileOrders.length > 0) {
         void this.refreshTrackedOrderStatuses();
         this.startOrderStatusPolling();
@@ -831,6 +835,31 @@ export class GuestOrderComponent implements OnDestroy {
     this.nowTicker = setInterval(() => {
       this.nowTick.set(Date.now());
     }, 1000);
+  }
+
+  private resetGuestSessionState(): void {
+    this.verified.set(false);
+    this.guestSessionToken.set(null);
+    this.verifiedMobileNumber.set(null);
+    this.showCart.set(false);
+    this.showPayment.set(false);
+    this.showOrderPlaced.set(false);
+    this.checkoutMessage.set('');
+    this.checkoutSuccess.set(false);
+    this.selectedDeliveryPreference.set(null);
+    this.deliveryPreferenceError.set('');
+    this.clearTrackedOrderState();
+  }
+
+  private clearTrackedOrderState(): void {
+    this.trackedOrderNumbers.set([]);
+    this.orderStatusByNumber.set({});
+    this.expandedTrackedOrders.set(new Set());
+    this.activeGuestTab.set('menu');
+    if (this.orderStatusPoller) {
+      clearInterval(this.orderStatusPoller);
+      this.orderStatusPoller = null;
+    }
   }
 
   private async refreshTrackedOrderStatuses(): Promise<void> {
