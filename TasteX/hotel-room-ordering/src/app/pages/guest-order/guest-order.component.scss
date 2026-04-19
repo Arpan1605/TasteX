@@ -517,7 +517,7 @@ h1 {
 }
 
 .menu-shell {
-  padding: 0.8rem 0.95rem 10.8rem;
+  padding: 0.8rem 0.95rem 12.4rem;
 }
 
 .menu-panel {
@@ -700,7 +700,7 @@ h1 {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: max(5.8rem, calc(env(safe-area-inset-bottom) + 5rem));
+  bottom: max(7rem, calc(env(safe-area-inset-bottom) + 6.2rem));
   width: min(440px, calc(100vw - 1.5rem));
   border: 0;
   background: #ff7a00;
@@ -969,7 +969,7 @@ h1 {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: max(4.9rem, calc(env(safe-area-inset-bottom) + 4.2rem));
+  bottom: max(5.9rem, calc(env(safe-area-inset-bottom) + 5.2rem));
   width: min(440px, 100vw);
   background: #f3f3f1;
   border-top: 1px solid #e5e7eb;
@@ -1027,7 +1027,7 @@ h1 {
 
 /* Payment page styles */
 .payment-shell {
-  padding-bottom: 13.2rem;
+  padding-bottom: 14.2rem;
 }
 
 .total-divider {
