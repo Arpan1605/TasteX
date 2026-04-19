@@ -80,6 +80,7 @@ export class GuestOrderComponent implements OnDestroy {
   private readonly hotelCode = signal('');
   private readonly otpSessionId = signal<string | null>(null);
   private readonly guestSessionToken = signal<string | null>(null);
+  private readonly verifiedMobileNumber = signal<string | null>(null);
   private readonly trackedOrderNumbers = signal<string[]>([]);
   private readonly orderStatusByNumber = signal<Record<string, {
     status: string;
@@ -201,12 +202,6 @@ export class GuestOrderComponent implements OnDestroy {
   constructor() {
     const code = this.route.snapshot.paramMap.get('hotelCode') ?? '';
     this.hotelCode.set(code);
-    this.trackedOrderNumbers.set(this.loadTrackedOrderNumbers(code));
-    if (this.trackedOrderNumbers().length > 0) {
-      void this.refreshTrackedOrderStatuses();
-      this.startOrderStatusPolling();
-      this.activeGuestTab.set('status');
-    }
     this.startNowTicker();
     void this.loadHotelMenu();
   }
@@ -362,6 +357,22 @@ export class GuestOrderComponent implements OnDestroy {
       }
 
       this.guestSessionToken.set(response.data.guestSessionToken);
+      this.verifiedMobileNumber.set(this.normalizeMobileNumberForStorage(this.mobile().trim()));
+      const sameMobileOrders = this.loadTrackedOrderNumbers(this.hotelCode(), this.mobile().trim());
+      this.trackedOrderNumbers.set(sameMobileOrders);
+      this.orderStatusByNumber.set({});
+      this.expandedTrackedOrders.set(new Set());
+      if (sameMobileOrders.length > 0) {
+        void this.refreshTrackedOrderStatuses();
+        this.startOrderStatusPolling();
+        this.activeGuestTab.set('status');
+      } else {
+        if (this.orderStatusPoller) {
+          clearInterval(this.orderStatusPoller);
+          this.orderStatusPoller = null;
+        }
+        this.activeGuestTab.set('menu');
+      }
       this.verified.set(true);
       this.checkoutMessage.set('');
       await this.loadHotelMenu();
@@ -593,7 +604,7 @@ export class GuestOrderComponent implements OnDestroy {
       this.checkoutMessage.set('Order placed successfully.');
       const nextOrders = [checkoutData.orderNumber, ...this.trackedOrderNumbers().filter((orderNo) => orderNo !== checkoutData.orderNumber)].slice(0, 12);
       this.trackedOrderNumbers.set(nextOrders);
-      this.persistTrackedOrderNumbers(this.hotelCode(), nextOrders);
+      this.persistTrackedOrderNumbers(this.hotelCode(), this.verifiedMobileNumber() ?? this.mobile().trim(), nextOrders);
       this.expandedTrackedOrders.set(new Set([checkoutData.orderNumber]));
       void this.refreshTrackedOrderStatuses();
       this.startOrderStatusPolling();
@@ -929,20 +940,44 @@ export class GuestOrderComponent implements OnDestroy {
     return String(method);
   }
 
-  private persistTrackedOrderNumbers(hotelCode: string, orderNumbers: string[]): void {
-    if (typeof window === 'undefined' || !hotelCode) {
+  private buildTrackedOrdersStorageKey(hotelCode: string, mobileNumber: string): string | null {
+    const normalizedHotelCode = hotelCode.trim().toLowerCase();
+    const normalizedMobile = this.normalizeMobileNumberForStorage(mobileNumber);
+    if (!normalizedHotelCode || !normalizedMobile) {
+      return null;
+    }
+
+    return `${this.trackedOrdersStorageKeyPrefix}${normalizedHotelCode}_${normalizedMobile}`;
+  }
+
+  private normalizeMobileNumberForStorage(mobileNumber: string): string {
+    return mobileNumber.replace(/\D/g, '').trim();
+  }
+
+  private persistTrackedOrderNumbers(hotelCode: string, mobileNumber: string, orderNumbers: string[]): void {
+    if (typeof window === 'undefined') {
       return;
     }
 
-    sessionStorage.setItem(this.trackedOrdersStorageKeyPrefix + hotelCode.toLowerCase(), JSON.stringify(orderNumbers));
+    const storageKey = this.buildTrackedOrdersStorageKey(hotelCode, mobileNumber);
+    if (!storageKey) {
+      return;
+    }
+
+    sessionStorage.setItem(storageKey, JSON.stringify(orderNumbers));
   }
 
-  private loadTrackedOrderNumbers(hotelCode: string): string[] {
-    if (typeof window === 'undefined' || !hotelCode) {
+  private loadTrackedOrderNumbers(hotelCode: string, mobileNumber: string): string[] {
+    if (typeof window === 'undefined') {
       return [];
     }
 
-    const raw = sessionStorage.getItem(this.trackedOrdersStorageKeyPrefix + hotelCode.toLowerCase());
+    const storageKey = this.buildTrackedOrdersStorageKey(hotelCode, mobileNumber);
+    if (!storageKey) {
+      return [];
+    }
+
+    const raw = sessionStorage.getItem(storageKey);
     if (!raw) {
       return [];
     }
