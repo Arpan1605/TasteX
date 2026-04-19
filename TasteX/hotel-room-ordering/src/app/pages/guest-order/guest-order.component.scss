@@ -517,7 +517,7 @@ h1 {
 }
 
 .menu-shell {
-  padding: 0.8rem 0.95rem 6rem;
+  padding: 0.8rem 0.95rem 10.8rem;
 }
 
 .menu-panel {
@@ -700,7 +700,7 @@ h1 {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 0.9rem;
+  bottom: max(5.8rem, calc(env(safe-area-inset-bottom) + 5rem));
   width: min(440px, calc(100vw - 1.5rem));
   border: 0;
   background: #ff7a00;
@@ -969,12 +969,13 @@ h1 {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 0;
+  bottom: max(4.9rem, calc(env(safe-area-inset-bottom) + 4.2rem));
   width: min(440px, 100vw);
   background: #f3f3f1;
   border-top: 1px solid #e5e7eb;
   padding: 0.75rem 0.95rem 0.95rem;
   z-index: 30;
+  box-shadow: 0 -8px 22px rgba(15, 23, 42, 0.06);
 }
 
 .cart-footer-row {
@@ -1026,7 +1027,7 @@ h1 {
 
 /* Payment page styles */
 .payment-shell {
-  padding-bottom: 8.8rem;
+  padding-bottom: 13.2rem;
 }
 
 .total-divider {
