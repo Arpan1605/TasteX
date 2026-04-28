@@ -304,7 +304,7 @@ export class AdminDashboardComponent implements OnDestroy {
           hotelsLabel: linkedHotels.map((hotel) => hotel.name).join(', '),
           hotelsCount: linkedHotels.length
         };
-      }))
+      })
       .filter((row) => {
         const cityMatch = this.qrCityFilter() ? row.cityId === this.qrCityFilter() : true;
         const q = this.qrSearchInput().trim().toLowerCase();
