@@ -19,6 +19,47 @@ public sealed class GuestOrderingService(
     IOtpDeliveryService otpDeliveryService,
     ILogger<GuestOrderingService> logger) : IGuestOrderingContract
 {
+    public async Task<ApiResponse<KitchenEntryResponse>> GetKitchenEntryAsync(string kitchenCode, CancellationToken cancellationToken = default)
+    {
+        var kitchen = await db.Kitchens
+            .AsNoTracking()
+            .Include(k => k.City)
+            .FirstOrDefaultAsync(k => k.KitchenCode == kitchenCode && k.IsActive, cancellationToken);
+
+        if (kitchen is null)
+        {
+            return new ApiResponse<KitchenEntryResponse>(false, null, new ApiError("KITCHEN_NOT_FOUND", "Invalid or inactive kitchen code."));
+        }
+
+        var hotels = await db.Hotels
+            .AsNoTracking()
+            .Include(h => h.City)
+            .Where(h => h.KitchenId == kitchen.KitchenId && h.IsActive)
+            .OrderBy(h => h.Name)
+            .Select(h => new GuestKitchenHotelOptionDto(
+                h.HotelId,
+                h.HotelCode,
+                h.Name,
+                h.CityId,
+                h.City.Name,
+                h.City.StateName,
+                h.AddressLine,
+                h.KitchenId,
+                kitchen.Name))
+            .ToListAsync(cancellationToken);
+
+        var response = new KitchenEntryResponse(
+            kitchen.KitchenId,
+            kitchen.KitchenCode,
+            kitchen.Name,
+            kitchen.CityId,
+            kitchen.City.Name,
+            kitchen.City.StateName,
+            hotels);
+
+        return new ApiResponse<KitchenEntryResponse>(true, response, null);
+    }
+
     public async Task<ApiResponse<HotelMenuResponse>> GetHotelMenuAsync(string hotelCode, CancellationToken cancellationToken = default)
     {
         var hotel = await db.Hotels

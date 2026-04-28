@@ -7,6 +7,10 @@ namespace HotelRoomOrdering.Api.Controllers;
 [Route("api/v1/guest")]
 public sealed class GuestController(IGuestOrderingContract service) : ApiControllerBase
 {
+    [HttpGet("kitchens/{kitchenCode}/context")]
+    public async Task<IActionResult> GetKitchenContext([FromRoute] string kitchenCode, CancellationToken cancellationToken)
+        => ToActionResult(await service.GetKitchenEntryAsync(kitchenCode, cancellationToken));
+
     [HttpGet("hotels/{hotelCode}/menu")]
     public async Task<IActionResult> GetMenu([FromRoute] string hotelCode, CancellationToken cancellationToken)
         => ToActionResult(await service.GetHotelMenuAsync(hotelCode, cancellationToken));

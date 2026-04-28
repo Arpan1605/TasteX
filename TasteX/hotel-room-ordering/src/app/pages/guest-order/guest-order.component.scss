@@ -239,6 +239,41 @@ h1 {
   overflow: hidden;
 }
 
+.hotel-choice-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.hotel-choice-card {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.95rem;
+  background: #fffaf5;
+  padding: 0.85rem 0.95rem;
+  text-align: left;
+  display: grid;
+  gap: 0.2rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.hotel-choice-card strong {
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.hotel-choice-card span,
+.hotel-choice-card small {
+  color: #6b7280;
+}
+
+.hotel-choice-card.active,
+.hotel-choice-card:hover {
+  border-color: #fb923c;
+  box-shadow: 0 8px 18px rgba(255, 111, 0, 0.12);
+  transform: translateY(-1px);
+}
+
 .mini-icon {
   width: 2.9rem;
   height: 2.9rem;

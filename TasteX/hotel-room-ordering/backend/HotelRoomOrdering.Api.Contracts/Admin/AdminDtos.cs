@@ -18,6 +18,7 @@ public sealed record AdminKitchenDto(
     long KitchenId,
     long CityId,
     string CityName,
+    string KitchenCode,
     string Name,
     string? AddressLine,
     string? ContactPhone,

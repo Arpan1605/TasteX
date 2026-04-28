@@ -38,6 +38,7 @@ type KitchenCard = {
   kitchenId: number;
   cityId: number;
   cityName: string;
+  kitchenCode: string;
   name: string;
   addressLine: string;
   contactPhone: string;
@@ -289,19 +290,27 @@ export class AdminDashboardComponent implements OnDestroy {
     });
   });
   readonly qrCards = computed(() =>
-    this.hotelCards()
-      .map((hotel) => ({
-        hotelId: hotel.hotelId,
-        name: hotel.name,
-        cityId: hotel.cityId,
-        cityName: hotel.cityName,
-        routeUrl: this.getGuestRouteUrl(hotel.hotelCode),
-        qrCodeUrl: hotel.qrCodeUrl
+    this.kitchenCards()
+      .map((kitchen) => {
+        const routeUrl = this.getGuestRouteUrl(kitchen.kitchenCode);
+        const linkedHotels = this.hotelCards().filter((hotel) => hotel.kitchenId === kitchen.kitchenId);
+        return {
+          kitchenId: kitchen.kitchenId,
+          name: kitchen.name,
+          cityId: kitchen.cityId,
+          cityName: kitchen.cityName,
+          routeUrl,
+          qrCodeUrl: this.getQrImageUrl(routeUrl),
+          hotelsLabel: linkedHotels.map((hotel) => hotel.name).join(', '),
+          hotelsCount: linkedHotels.length
+        };
       }))
       .filter((row) => {
         const cityMatch = this.qrCityFilter() ? row.cityId === this.qrCityFilter() : true;
         const q = this.qrSearchInput().trim().toLowerCase();
-        const searchMatch = q ? row.name.toLowerCase().includes(q) || row.routeUrl.toLowerCase().includes(q) : true;
+        const searchMatch = q
+          ? row.name.toLowerCase().includes(q) || row.routeUrl.toLowerCase().includes(q) || row.hotelsLabel.toLowerCase().includes(q)
+          : true;
         return cityMatch && searchMatch;
       })
   );
@@ -527,8 +536,17 @@ export class AdminDashboardComponent implements OnDestroy {
     return 'http://localhost:4200';
   }
 
-  private getGuestRouteUrl(hotelCode: string): string {
-    return `${this.getGuestBaseUrl()}/guest/${hotelCode}`;
+  private getGuestRouteUrl(kitchenCode: string): string {
+    return `${this.getGuestBaseUrl()}/guest/${kitchenCode}`;
+  }
+
+  private getQrImageUrl(routeUrl: string): string {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(routeUrl)}`;
+  }
+
+  private buildFallbackKitchenCode(name: string, kitchenId: number): string {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20);
+    return slug ? `kch-${slug}-${kitchenId}` : `kch-${kitchenId}`;
   }
   private formatReportCurrency(value: number): string {
     return new Intl.NumberFormat('en-IN', {
@@ -1071,8 +1089,10 @@ export class AdminDashboardComponent implements OnDestroy {
     this.hotelRoomCountInput.set(String(hotel.roomCount || ''));
     this.hotelActiveInput.set(hotel.isActive);
     this.hotelFormError.set('');
-    this.hotelQrPayload.set(this.getGuestRouteUrl(hotel.hotelCode));
-    this.hotelQrPreviewUrl.set(hotel.qrCodeUrl);
+    const assignedKitchen = this.kitchenCards().find((entry) => entry.kitchenId === hotel.kitchenId);
+    const payload = assignedKitchen ? this.getGuestRouteUrl(assignedKitchen.kitchenCode) : '';
+    this.hotelQrPayload.set(payload);
+    this.hotelQrPreviewUrl.set(payload ? this.getQrImageUrl(payload) : '');
     this.showHotelModal.set(true);
   }
 
@@ -1108,14 +1128,19 @@ export class AdminDashboardComponent implements OnDestroy {
     const cityId = this.hotelCityIdInput();
     const kitchenId = this.hotelKitchenIdInput();
     if (!name || !cityId || !kitchenId) {
-      this.hotelFormError.set('Hotel Name, City and Assigned Kitchen are required to generate QR.');
+      this.hotelFormError.set('Hotel name, city and assigned kitchen are required to preview the kitchen QR.');
       return;
     }
 
-    const code = `${name}-${cityId}-${kitchenId}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || `hotel-${Date.now()}`;
-    const payload = this.getGuestRouteUrl(code);
+    const kitchen = this.kitchenCards().find((entry) => entry.kitchenId === kitchenId);
+    if (!kitchen) {
+      this.hotelFormError.set('Please choose a valid kitchen to preview the QR.');
+      return;
+    }
+
+    const payload = this.getGuestRouteUrl(kitchen.kitchenCode);
     this.hotelQrPayload.set(payload);
-    this.hotelQrPreviewUrl.set(`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(payload)}`);
+    this.hotelQrPreviewUrl.set(this.getQrImageUrl(payload));
     this.hotelFormError.set('');
   }
 
@@ -1649,6 +1674,7 @@ export class AdminDashboardComponent implements OnDestroy {
       kitchenId: dto.kitchenId,
       cityId: dto.cityId,
       cityName: dto.cityName,
+      kitchenCode: dto.kitchenCode,
       name: dto.name,
       addressLine: dto.addressLine ?? '',
       contactPhone: dto.contactPhone ?? '',
@@ -1714,6 +1740,7 @@ export class AdminDashboardComponent implements OnDestroy {
         kitchenId: kitchen.id,
         cityId: kitchen.cityId,
         cityName: city?.name ?? 'Unknown',
+        kitchenCode: this.buildFallbackKitchenCode(kitchen.name, kitchen.id),
         name: kitchen.name,
         addressLine: `${city?.name ?? 'Unknown'} Central Zone`,
         contactPhone: '9876543210',
@@ -1749,7 +1776,7 @@ export class AdminDashboardComponent implements OnDestroy {
         isActive: true,
         ordersCount,
         revenue,
-        qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(this.getGuestRouteUrl(hotel.code))}`
+        qrCodeUrl: this.getQrImageUrl(this.getGuestRouteUrl(this.buildFallbackKitchenCode(kitchenName, hotel.kitchenId)))
       };
     });
   }

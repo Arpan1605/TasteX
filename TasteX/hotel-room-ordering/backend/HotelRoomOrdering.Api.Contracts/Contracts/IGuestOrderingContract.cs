@@ -6,6 +6,8 @@ namespace HotelRoomOrdering.Api.Contracts.Contracts;
 
 public interface IGuestOrderingContract
 {
+    Task<ApiResponse<KitchenEntryResponse>> GetKitchenEntryAsync(string kitchenCode, CancellationToken cancellationToken = default);
+
     Task<ApiResponse<HotelMenuResponse>> GetHotelMenuAsync(string hotelCode, CancellationToken cancellationToken = default);
 
     Task<ApiResponse<SendOtpResponse>> SendOtpAsync(SendOtpRequest request, CancellationToken cancellationToken = default);

@@ -909,6 +909,7 @@ public sealed class AdminManagementService(OrderingDbContext db, IClock clock, I
             kitchen.KitchenId,
             kitchen.CityId,
             kitchen.City.Name,
+            kitchen.KitchenCode,
             kitchen.Name,
             kitchen.AddressLine,
             kitchen.ContactPhone,
@@ -939,13 +940,13 @@ public sealed class AdminManagementService(OrderingDbContext db, IClock clock, I
             hotel.IsActive,
             ordersCount,
             revenue,
-            BuildQrCodeUrl(hotel.HotelCode));
+            BuildKitchenQrCodeUrl(hotel.Kitchen.KitchenCode));
     }
 
-    private string BuildQrCodeUrl(string hotelCode)
+    private string BuildKitchenQrCodeUrl(string kitchenCode)
     {
         var guestBaseUrl = (configuration["AppUrls:GuestBaseUrl"] ?? "http://localhost:4200").TrimEnd('/');
-        var routeUrl = $"{guestBaseUrl}/guest/{hotelCode}";
+        var routeUrl = $"{guestBaseUrl}/guest/{kitchenCode}";
         var data = Uri.EscapeDataString(routeUrl);
         return $"https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={data}";
     }

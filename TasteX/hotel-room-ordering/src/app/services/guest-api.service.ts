@@ -35,6 +35,28 @@ export interface GuestMenuCategoryDto {
   items: GuestMenuItemDto[];
 }
 
+export interface KitchenHotelOptionDto {
+  hotelId: number;
+  hotelCode: string;
+  hotelName: string;
+  cityId: number;
+  cityName: string;
+  stateName?: string | null;
+  hotelAddressLine?: string | null;
+  kitchenId: number;
+  kitchenName: string;
+}
+
+export interface KitchenEntryResponseDto {
+  kitchenId: number;
+  kitchenCode: string;
+  kitchenName: string;
+  cityId: number;
+  cityName: string;
+  stateName?: string | null;
+  hotels: KitchenHotelOptionDto[];
+}
+
 export interface HotelMenuResponseDto {
   hotelId: number;
   hotelCode: string;
@@ -121,6 +143,10 @@ export interface GuestOrderStatusResponse {
 export class GuestApiService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${API_BASE_URL}/api/v1/guest`;
+
+  getKitchenContext(kitchenCode: string): Observable<ApiResponse<KitchenEntryResponseDto>> {
+    return this.http.get<ApiResponse<KitchenEntryResponseDto>>(`${this.baseUrl}/kitchens/${encodeURIComponent(kitchenCode)}/context`);
+  }
 
   getHotelMenu(hotelCode: string): Observable<ApiResponse<HotelMenuResponseDto>> {
     return this.http.get<ApiResponse<HotelMenuResponseDto>>(`${this.baseUrl}/hotels/${encodeURIComponent(hotelCode)}/menu`);

@@ -7,6 +7,7 @@ export interface AdminKitchenDto {
   kitchenId: number;
   cityId: number;
   cityName: string;
+  kitchenCode: string;
   name: string;
   addressLine?: string | null;
   contactPhone?: string | null;

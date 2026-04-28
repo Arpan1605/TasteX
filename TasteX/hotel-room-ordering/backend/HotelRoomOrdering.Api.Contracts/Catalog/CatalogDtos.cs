@@ -23,6 +23,26 @@ public sealed record HotelDto(
     string? AddressLine,
     bool IsActive);
 
+public sealed record GuestKitchenHotelOptionDto(
+    long HotelId,
+    string HotelCode,
+    string HotelName,
+    long CityId,
+    string CityName,
+    string? StateName,
+    string? HotelAddressLine,
+    long KitchenId,
+    string KitchenName);
+
+public sealed record KitchenEntryResponse(
+    long KitchenId,
+    string KitchenCode,
+    string KitchenName,
+    long CityId,
+    string CityName,
+    string? StateName,
+    IReadOnlyList<GuestKitchenHotelOptionDto> Hotels);
+
 public sealed record CategoryDto(
     long CategoryId,
     string CategoryCode,

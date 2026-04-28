@@ -21,6 +21,16 @@ interface GuestHotelView {
   kitchenName: string;
 }
 
+interface GuestKitchenContextView {
+  id: number;
+  code: string;
+  name: string;
+  cityId: number;
+  cityName: string;
+  stateName: string;
+  hotels: GuestHotelView[];
+}
+
 interface MenuItemView {
   id: number;
   categoryId: number;
@@ -54,15 +64,17 @@ export class GuestOrderComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly guestApi = inject(GuestApiService);
 
+  kitchenContext = signal<GuestKitchenContextView | null>(null);
   hotel = signal<GuestHotelView | null>(null);
   roomNumber = signal('');
   mobile = signal('');
   searchTerm = signal('');
+  guestEntryError = signal('');
 
   checkoutMessage = signal('');
   checkoutSuccess = signal(false);
 
-  currentStep = signal<1 | 2 | 3>(1);
+  currentStep = signal<1 | 2 | 3 | 4>(1);
   otpDigits = signal<string[]>(['', '', '', '', '', '']);
   otpHint = signal('');
   otpError = signal('');
@@ -77,7 +89,7 @@ export class GuestOrderComponent implements OnDestroy {
   activeGuestTab = signal<'menu' | 'status'>('menu');
   collapsedCategories = signal<Set<number>>(new Set());
 
-  private readonly hotelCode = signal('');
+  private readonly kitchenCode = signal('');
   private readonly otpSessionId = signal<string | null>(null);
   private readonly guestSessionToken = signal<string | null>(null);
   private readonly verifiedMobileNumber = signal<string | null>(null);
@@ -116,6 +128,7 @@ export class GuestOrderComponent implements OnDestroy {
   readonly payableTotal = computed(() => this.cartTotal() + this.gstAmount());
   readonly selectedPreference = computed(() => this.selectedPreferenceState());
   readonly showMenu = computed(() => this.verified());
+  readonly availableHotels = computed(() => this.kitchenContext()?.hotels ?? []);
   readonly showStatusTab = computed(() => this.verified() && this.trackedOrders().length > 0);
   readonly trackedOrders = computed(() => {
     const numbers = this.trackedOrderNumbers();
@@ -145,8 +158,13 @@ export class GuestOrderComponent implements OnDestroy {
 
   readonly hotelContext = computed(() => {
     const selectedHotel = this.hotel();
+    const kitchen = this.kitchenContext();
     if (!selectedHotel) {
-      return { cityName: '-', stateName: '-', kitchenName: '-' };
+      return {
+        cityName: kitchen?.cityName ?? '-',
+        stateName: kitchen?.stateName ?? '-',
+        kitchenName: kitchen?.name ?? '-'
+      };
     }
     return { cityName: selectedHotel.cityName, stateName: selectedHotel.stateName, kitchenName: selectedHotel.kitchenName };
   });
@@ -200,10 +218,10 @@ export class GuestOrderComponent implements OnDestroy {
   };
 
   constructor() {
-    const code = this.route.snapshot.paramMap.get('hotelCode') ?? '';
-    this.hotelCode.set(code);
+    const code = this.route.snapshot.paramMap.get('kitchenCode') ?? '';
+    this.kitchenCode.set(code);
     this.startNowTicker();
-    void this.loadHotelMenu();
+    void this.loadKitchenContext();
   }
 
   ngOnDestroy(): void {
@@ -229,8 +247,33 @@ export class GuestOrderComponent implements OnDestroy {
     }
   }
 
-  stepDone(step: 1 | 2 | 3): boolean {
-    return this.currentStep() > step || (step === 3 && this.verified());
+  stepDone(step: 1 | 2 | 3 | 4): boolean {
+    return this.currentStep() > step || (step === 4 && this.verified());
+  }
+
+  selectHotel(hotel: GuestHotelView): void {
+    const previousHotelCode = this.hotel()?.code ?? '';
+    this.hotel.set(hotel);
+    this.roomNumber.set('');
+    this.mobile.set('');
+    this.searchTerm.set('');
+    this.otpDigits.set(['', '', '', '', '', '']);
+    this.otpHint.set('');
+    this.otpError.set('');
+    this.roomError.set('');
+    this.mobileError.set('');
+    this.deliveryPreferenceError.set('');
+    this.selectedDeliveryPreference.set(null);
+    this.cartLines.set([]);
+    this.menuSections.set([]);
+
+    if (previousHotelCode && previousHotelCode !== hotel.code) {
+      this.resetGuestSessionState();
+    }
+
+    this.currentStep.set(2);
+    this.guestEntryError.set('');
+    void this.loadHotelMenu(hotel.code);
   }
 
   continueToMobile(): void {
@@ -241,7 +284,7 @@ export class GuestOrderComponent implements OnDestroy {
       return;
     }
 
-    this.currentStep.set(2);
+    this.currentStep.set(3);
   }
 
   async sendOtp(): Promise<void> {
@@ -254,6 +297,13 @@ export class GuestOrderComponent implements OnDestroy {
       return;
     }
 
+    const selectedHotel = this.hotel();
+    if (!selectedHotel) {
+      this.mobileError.set('Please select a hotel before requesting OTP.');
+      this.currentStep.set(1);
+      return;
+    }
+
     const normalizedMobile = this.normalizeMobileNumberForStorage(mobile);
     if (this.verifiedMobileNumber() !== normalizedMobile) {
       this.resetGuestSessionState();
@@ -262,7 +312,7 @@ export class GuestOrderComponent implements OnDestroy {
     try {
       const response = await firstValueFrom(this.guestApi.sendOtp({
         mobileNumber: mobile,
-        hotelCode: this.hotelCode(),
+        hotelCode: selectedHotel.code,
         purpose: 1
       }));
 
@@ -273,7 +323,7 @@ export class GuestOrderComponent implements OnDestroy {
 
       this.otpSessionId.set(response.data.otpSessionId);
       this.otpHint.set('OTP sent to your mobile number.');
-      this.currentStep.set(3);
+      this.currentStep.set(4);
       this.otpDigits.set(['', '', '', '', '', '']);
 
       const end = new Date(response.data.expiresAtUtc).getTime();
@@ -364,7 +414,8 @@ export class GuestOrderComponent implements OnDestroy {
       this.guestSessionToken.set(response.data.guestSessionToken);
       this.verifiedMobileNumber.set(this.normalizeMobileNumberForStorage(this.mobile().trim()));
       this.clearTrackedOrderState();
-      const sameMobileOrders = this.loadTrackedOrderNumbers(this.hotelCode(), this.mobile().trim());
+      const activeHotelCode = this.hotel()?.code ?? '';
+      const sameMobileOrders = this.loadTrackedOrderNumbers(activeHotelCode, this.mobile().trim());
       this.trackedOrderNumbers.set(sameMobileOrders);
       if (sameMobileOrders.length > 0) {
         void this.refreshTrackedOrderStatuses();
@@ -379,7 +430,7 @@ export class GuestOrderComponent implements OnDestroy {
       }
       this.verified.set(true);
       this.checkoutMessage.set('');
-      await this.loadHotelMenu();
+      await this.loadHotelMenu(activeHotelCode);
     } catch (error) {
       this.otpError.set(this.extractApiError(error, 'Invalid or expired OTP.'));
     }
@@ -569,6 +620,15 @@ export class GuestOrderComponent implements OnDestroy {
       return;
     }
 
+    const activeHotel = this.hotel();
+    if (!activeHotel) {
+      this.checkoutSuccess.set(false);
+      this.checkoutMessage.set('Please select a hotel before placing the order.');
+      this.activeGuestTab.set('menu');
+      this.currentStep.set(1);
+      return;
+    }
+
     const lines = this.cartItems().map((line) => ({ itemId: line.itemId, quantity: line.quantity }));
     if (lines.length === 0) {
       this.checkoutSuccess.set(false);
@@ -585,7 +645,7 @@ export class GuestOrderComponent implements OnDestroy {
     try {
       const response = await firstValueFrom(this.guestApi.checkout({
         guestSessionToken: token,
-        hotelCode: this.hotelCode(),
+        hotelCode: activeHotel.code,
         roomNumber: this.roomNumber().trim() || undefined,
         deliveryPreference,
         currencyCode: 'INR',
@@ -608,7 +668,7 @@ export class GuestOrderComponent implements OnDestroy {
       this.checkoutMessage.set('Order placed successfully.');
       const nextOrders = [checkoutData.orderNumber, ...this.trackedOrderNumbers().filter((orderNo) => orderNo !== checkoutData.orderNumber)].slice(0, 12);
       this.trackedOrderNumbers.set(nextOrders);
-      this.persistTrackedOrderNumbers(this.hotelCode(), this.verifiedMobileNumber() ?? this.mobile().trim(), nextOrders);
+      this.persistTrackedOrderNumbers(activeHotel.code, this.verifiedMobileNumber() ?? this.mobile().trim(), nextOrders);
       this.expandedTrackedOrders.set(new Set([checkoutData.orderNumber]));
       void this.refreshTrackedOrderStatuses();
       this.startOrderStatusPolling();
@@ -621,7 +681,7 @@ export class GuestOrderComponent implements OnDestroy {
       this.showCart.set(false);
       this.cartLines.set([]);
 
-      await this.loadHotelMenu();
+      await this.loadHotelMenu(activeHotel.code);
 
       if (this.orderPlacedTimer) {
         clearTimeout(this.orderPlacedTimer);
@@ -647,10 +707,61 @@ export class GuestOrderComponent implements OnDestroy {
     });
   }
 
-  private async loadHotelMenu(): Promise<void> {
-    const code = this.hotelCode();
+  private async loadKitchenContext(): Promise<void> {
+    const code = this.kitchenCode().trim();
     if (!code) {
+      this.guestEntryError.set('Please scan a valid kitchen QR code to start ordering.');
+      this.kitchenContext.set(null);
       this.hotel.set(null);
+      this.menuSections.set([]);
+      return;
+    }
+
+    try {
+      const response = await firstValueFrom(this.guestApi.getKitchenContext(code));
+      if (!response.success || !response.data) {
+        this.guestEntryError.set(response.error?.message?.trim() || 'Unable to load kitchen details.');
+        this.kitchenContext.set(null);
+        this.hotel.set(null);
+        this.menuSections.set([]);
+        return;
+      }
+
+      const payload = response.data;
+      const hotels = (payload.hotels ?? []).map((hotel) => ({
+        id: hotel.hotelId,
+        code: hotel.hotelCode,
+        name: hotel.hotelName,
+        cityName: hotel.cityName,
+        stateName: hotel.stateName?.trim() || '-',
+        addressLine: hotel.hotelAddressLine?.trim() || hotel.cityName,
+        kitchenName: hotel.kitchenName
+      }));
+
+      this.kitchenContext.set({
+        id: payload.kitchenId,
+        code: payload.kitchenCode,
+        name: payload.kitchenName,
+        cityId: payload.cityId,
+        cityName: payload.cityName,
+        stateName: payload.stateName?.trim() || '-',
+        hotels
+      });
+      this.guestEntryError.set('');
+
+      const selectedHotelCode = this.hotel()?.code;
+      this.hotel.set(selectedHotelCode ? hotels.find((hotel) => hotel.code === selectedHotelCode) ?? null : null);
+    } catch (error) {
+      this.guestEntryError.set(this.extractApiError(error, 'Unable to load kitchen details.'));
+      this.kitchenContext.set(null);
+      this.hotel.set(null);
+      this.menuSections.set([]);
+    }
+  }
+
+  private async loadHotelMenu(hotelCode = this.hotel()?.code ?? ''): Promise<void> {
+    const code = hotelCode.trim();
+    if (!code) {
       this.menuSections.set([]);
       return;
     }
@@ -660,13 +771,12 @@ export class GuestOrderComponent implements OnDestroy {
       if (!response.success || !response.data) {
         this.checkoutSuccess.set(false);
         this.checkoutMessage.set(response.error?.message?.trim() || 'Unable to load menu.');
-        this.hotel.set(null);
         this.menuSections.set([]);
         return;
       }
 
       const payload = response.data;
-      this.hotel.set({
+      const activeHotel = {
         id: payload.hotelId,
         code: payload.hotelCode,
         name: payload.hotelName,
@@ -674,7 +784,11 @@ export class GuestOrderComponent implements OnDestroy {
         stateName: payload.stateName?.trim() || '-',
         addressLine: payload.hotelAddressLine?.trim() || payload.cityName,
         kitchenName: payload.kitchenName
-      });
+      };
+
+      if (this.hotel()?.code !== activeHotel.code) {
+        this.hotel.set(activeHotel);
+      }
 
       const sections: MenuSectionView[] = payload.categories
         .slice()
@@ -708,7 +822,6 @@ export class GuestOrderComponent implements OnDestroy {
     } catch (error) {
       this.checkoutSuccess.set(false);
       this.checkoutMessage.set(this.extractApiError(error, 'Unable to load menu.'));
-      this.hotel.set(null);
       this.menuSections.set([]);
     }
   }

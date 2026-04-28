@@ -1,98 +1,134 @@
 ﻿<div class="verify-page">
-  @if (hotel(); as selectedHotel) {
-    @if (!showMenu()) {
-      <header class="top-bar">
-        <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back"></button>
-        <div>
-          <h1>{{ selectedHotel.name }}</h1>
-          <p>{{ hotelContext().cityName }}{{ hotelContext().stateName && hotelContext().stateName !== '-' ? ', ' + hotelContext().stateName : '' }} • Verify to Order</p>
-        </div>
-      </header>
+  @if (!showMenu()) {
+    <header class="top-bar">
+      <button pButton icon="pi pi-arrow-left" text="true" rounded="true" class="icon-btn" aria-label="Back"></button>
+      <div>
+        <h1>{{ hotel()?.name || kitchenContext()?.name || 'TasteX Ordering System' }}</h1>
+        <p>
+          @if (hotel()) {
+            {{ hotelContext().cityName }}{{ hotelContext().stateName && hotelContext().stateName !== '-' ? ', ' + hotelContext().stateName : '' }} • Verify to Order
+          } @else if (kitchenContext()) {
+            {{ hotelContext().cityName }}{{ hotelContext().stateName && hotelContext().stateName !== '-' ? ', ' + hotelContext().stateName : '' }} • Choose Hotel
+          } @else {
+            Scan a valid kitchen QR to continue
+          }
+        </p>
+      </div>
+    </header>
 
-      <main class="verify-shell">
-        <section class="hotel-badge">
-          <div class="hotel-icon">
+    <main class="verify-shell">
+      <section class="hotel-badge">
+        <div class="hotel-icon">
+          <i class="pi pi-building"></i>
+        </div>
+        <div>
+          <h2>{{ hotel()?.name || kitchenContext()?.name || 'TasteX Ordering' }}</h2>
+          <p>
+            {{ hotel()?.addressLine || (kitchenContext() ? hotelContext().cityName + (hotelContext().stateName && hotelContext().stateName !== '-' ? ', ' + hotelContext().stateName : '') : 'Scan a valid kitchen QR to start ordering') }}
+          </p>
+        </div>
+      </section>
+
+      <section class="stepper">
+        <div class="step" [class.done]="stepDone(1)" [class.current]="currentStep() === 1">
+          <span>1</span><label>Hotel</label>
+        </div>
+        <div class="line" [class.active]="stepDone(1)"></div>
+        <div class="step" [class.done]="stepDone(2)" [class.current]="currentStep() === 2">
+          <span>2</span><label>Room</label>
+        </div>
+        <div class="line" [class.active]="stepDone(2)"></div>
+        <div class="step" [class.done]="stepDone(3)" [class.current]="currentStep() === 3">
+          <span>3</span><label>Mobile</label>
+        </div>
+        <div class="line" [class.active]="stepDone(3)"></div>
+        <div class="step" [class.done]="stepDone(4)" [class.current]="currentStep() === 4">
+          <span>4</span><label>Verify</label>
+        </div>
+      </section>
+
+      <section class="card-box">
+        @if (currentStep() === 1) {
+          <div class="mini-icon">
             <i class="pi pi-building"></i>
           </div>
-          <div>
-            <h2>{{ selectedHotel.name }}</h2>
-            <p>{{ selectedHotel.addressLine }}</p>
-          </div>
-        </section>
-
-        <section class="stepper">
-          <div class="step" [class.done]="stepDone(1)" [class.current]="currentStep() === 1">
-            <span>1</span><label>Room</label>
-          </div>
-          <div class="line" [class.active]="stepDone(1)"></div>
-          <div class="step" [class.done]="stepDone(2)" [class.current]="currentStep() === 2">
-            <span>2</span><label>Mobile</label>
-          </div>
-          <div class="line" [class.active]="stepDone(2)"></div>
-          <div class="step" [class.done]="stepDone(3)" [class.current]="currentStep() === 3">
-            <span>3</span><label>Verify</label>
-          </div>
-        </section>
-
-        <section class="card-box">
-          @if (currentStep() === 1) {
-            <div class="mini-icon">
-              <i class="pi pi-home"></i>
-            </div>
-            <h3>Enter Room Number</h3>
-            <p class="sub">Please enter your room number to continue</p>
-            <input class="big-input" placeholder="e.g. 304" [ngModel]="roomNumber()" (ngModelChange)="roomNumber.set($event)" />
-            @if (roomError()) {
-              <small class="err">{{ roomError() }}</small>
-            }
-            <button class="cta" (click)="continueToMobile()">Continue</button>
+          <h3>Select Hotel</h3>
+          <p class="sub">Choose the hotel served by this kitchen before we continue to room verification.</p>
+          @if (guestEntryError()) {
+            <small class="err">{{ guestEntryError() }}</small>
           }
-
-          @if (currentStep() === 2) {
-            <div class="mini-icon">
-              <i class="pi pi-phone"></i>
-            </div>
-            <h3>Verify Mobile Number</h3>
-            <p class="sub">Room: <strong>{{ roomNumber() }}</strong></p>
-            <p class="sub">We'll send a 6-digit OTP to your mobile</p>
-            <div class="phone-wrap">
-              <span>+91</span>
-              <input placeholder="10-digit mobile number" [ngModel]="mobile()" (ngModelChange)="mobile.set($event)" />
-            </div>
-            @if (mobileError()) {
-              <small class="err">{{ mobileError() }}</small>
+          <div class="hotel-choice-list">
+            @for (option of availableHotels(); track option.code) {
+              <button type="button" class="hotel-choice-card" [class.active]="hotel()?.code === option.code" (click)="selectHotel(option)">
+                <strong>{{ option.name }}</strong>
+                <span>{{ option.cityName }}{{ option.stateName && option.stateName !== '-' ? ', ' + option.stateName : '' }}</span>
+                <small>{{ option.addressLine }}</small>
+              </button>
             }
-            <button class="cta" (click)="sendOtp()">Send OTP</button>
+          </div>
+          @if (!guestEntryError() && availableHotels().length === 0) {
+            <small class="err">No active hotels are mapped to this kitchen yet.</small>
           }
+        }
 
-          @if (currentStep() === 3) {
-            <div class="mini-icon green">
-              <i class="pi pi-shield"></i>
-            </div>
-            <h3>Enter OTP</h3>
-            <p class="sub">Sent to <strong>+91 {{ mobile() }}</strong></p>
-            <p class="sub muted"><i class="pi pi-clock"></i> Expires in {{ timerText() }}</p>
-            <div class="otp-demo">{{ otpHint() }}</div>
-            <div class="otp-row">
-              @for (digit of otpDigits(); track $index) {
-                <input
-                  class="otp-cell"
-                  maxlength="1"
-                  inputmode="numeric"
-                  [value]="digit"
-                  (input)="onOtpInput($index, ($any($event.target)).value, $event)"
-                  (keydown)="onOtpKeyDown($index, $event)" />
-              }
-            </div>
-            @if (otpError()) {
-              <small class="err">{{ otpError() }}</small>
-            }
-            <button class="cta" (click)="verifyOtp()">Verify & Continue</button>
-            <button class="ghost" [disabled]="remainingSeconds() > 0" (click)="sendOtp()">Resend OTP</button>
+        @if (currentStep() === 2) {
+          <div class="mini-icon">
+            <i class="pi pi-home"></i>
+          </div>
+          <h3>Enter Room Number</h3>
+          <p class="sub">Please enter your room number for <strong>{{ hotel()?.name }}</strong></p>
+          <input class="big-input" placeholder="e.g. 304" [ngModel]="roomNumber()" (ngModelChange)="roomNumber.set($event)" />
+          @if (roomError()) {
+            <small class="err">{{ roomError() }}</small>
           }
-        </section>
-      </main>
-    } @else {
+          <button class="cta" (click)="continueToMobile()">Continue</button>
+        }
+
+        @if (currentStep() === 3) {
+          <div class="mini-icon">
+            <i class="pi pi-phone"></i>
+          </div>
+          <h3>Verify Mobile Number</h3>
+          <p class="sub">{{ hotel()?.name }} • Room: <strong>{{ roomNumber() }}</strong></p>
+          <p class="sub">We'll send a 6-digit OTP to your mobile</p>
+          <div class="phone-wrap">
+            <span>+91</span>
+            <input placeholder="10-digit mobile number" [ngModel]="mobile()" (ngModelChange)="mobile.set($event)" />
+          </div>
+          @if (mobileError()) {
+            <small class="err">{{ mobileError() }}</small>
+          }
+          <button class="cta" (click)="sendOtp()">Send OTP</button>
+        }
+
+        @if (currentStep() === 4) {
+          <div class="mini-icon green">
+            <i class="pi pi-shield"></i>
+          </div>
+          <h3>Enter OTP</h3>
+          <p class="sub">Sent to <strong>+91 {{ mobile() }}</strong></p>
+          <p class="sub muted"><i class="pi pi-clock"></i> Expires in {{ timerText() }}</p>
+          <div class="otp-demo">{{ otpHint() }}</div>
+          <div class="otp-row">
+            @for (digit of otpDigits(); track $index) {
+              <input
+                class="otp-cell"
+                maxlength="1"
+                inputmode="numeric"
+                [value]="digit"
+                (input)="onOtpInput($index, ($any($event.target)).value, $event)"
+                (keydown)="onOtpKeyDown($index, $event)" />
+            }
+          </div>
+          @if (otpError()) {
+            <small class="err">{{ otpError() }}</small>
+          }
+          <button class="cta" (click)="verifyOtp()">Verify & Continue</button>
+          <button class="ghost" [disabled]="remainingSeconds() > 0" (click)="sendOtp()">Resend OTP</button>
+        }
+      </section>
+    </main>
+  } @else if (hotel(); as selectedHotel) {
       <div class="app-strip">
         <span>TasteX Ordering System</span>
       </div>
@@ -433,9 +469,10 @@
         <button type="button" class="guest-tab" [class.active]="activeGuestTab() === 'menu'" (click)="switchGuestTab('menu')">Menu</button>
         <button type="button" class="guest-tab" [class.active]="activeGuestTab() === 'status'" [disabled]="!showStatusTab()" (click)="switchGuestTab('status')">Order Status</button>
       </nav>
-    }
   }
 </div>
+
+
 
 
 

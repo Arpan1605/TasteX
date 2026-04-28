@@ -434,7 +434,7 @@
       <div class="section-head">
         <div>
           <h1>QR Code Generator</h1>
-          <p class="section-subtitle">Each hotel gets a unique QR code that routes guests directly to that hotel's ordering page.</p>
+          <p class="section-subtitle">Each kitchen gets a unique QR code, and guests choose their hotel after scanning before continuing to order.</p>
         </div>
       </div>
 
@@ -445,16 +445,17 @@
             <option [value]="city.id">{{ city.name }}</option>
           }
         </select>
-        <input type="text" [value]="qrSearchInput()" (input)="qrSearchInput.set(($any($event.target)).value)" placeholder="Search hotel or URL" />
+        <input type="text" [value]="qrSearchInput()" (input)="qrSearchInput.set(($any($event.target)).value)" placeholder="Search kitchen, linked hotel or URL" />
       </section>
 
       <section class="qr-grid">
-        @for (qr of qrCards(); track qr.hotelId) {
+        @for (qr of qrCards(); track qr.kitchenId) {
           <article class="qr-card">
             <img [src]="qr.qrCodeUrl" [alt]="qr.name + ' QR'" width="92" height="92" />
             <div class="qr-info">
               <h3>{{ qr.name }}</h3>
               <p>{{ qr.cityName }}</p>
+              <p>Hotels served: {{ qr.hotelsCount }}{{ qr.hotelsLabel ? ' • ' + qr.hotelsLabel : '' }}</p>
               <a [href]="qr.routeUrl" target="_blank" rel="noopener">{{ qr.routeUrl }}</a>
               <div class="qr-actions">
                 <button type="button" class="edit-city-btn" (click)="downloadQrPng(qr.qrCodeUrl, qr.name)"><i class="pi pi-download"></i> PNG</button>
@@ -821,16 +822,16 @@
             </button>
           </div>
 
-          <button type="button" class="btn-add btn-orange" (click)="generateHotelQrPreview()">Generate QR Code</button>
+          <button type="button" class="btn-add btn-orange" (click)="generateHotelQrPreview()">Preview Kitchen QR</button>
         </div>
 
         <div class="qr-preview-panel">
           @if (hotelQrPreviewUrl()) {
-            <img [src]="hotelQrPreviewUrl()" alt="Hotel QR Preview" width="220" height="220" />
+            <img [src]="hotelQrPreviewUrl()" alt="Kitchen QR Preview" width="220" height="220" />
             <p>{{ hotelQrPayload() }}</p>
           } @else {
             <span class="placeholder-icon"><i class="pi pi-qrcode"></i></span>
-            <p>Fill in hotel details and click "Generate QR Code" to preview</p>
+            <p>Choose an assigned kitchen and click "Preview Kitchen QR" to preview the scan destination</p>
           }
         </div>
       </div>
